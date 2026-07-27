@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="飛行日誌">
+<meta name="theme-color" content="#1a73e8">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<link rel="stylesheet" href="./css/style.css">
+<title>dji-log 飛行日誌</title>
+</head>
+<body>
+
+<header class="topbar">
+  <span class="brand">🛩 飛行日誌</span>
+  <nav>
+    <button class="tab-btn active" data-view="list">記録</button>
+    <button class="tab-btn" data-view="settings">設定</button>
+  </nav>
+</header>
+
+<main>
+  <!-- 一覧 -->
+  <section id="view-list">
+    <div class="card import">
+      <label class="btn primary block">
+        飛行記録を読み込む
+        <input type="file" id="file-input" accept=".txt" multiple hidden>
+      </label>
+      <p class="help">
+        「ファイル」App →「このiPhone内」→ <b>DJI Fly</b> → <b>FlightRecords</b> の中の
+        .txt を選んでください。まとめて選択できます。
+      </p>
+      <div id="import-status" class="status" hidden>
+        <div class="bar"><div class="bar-fill" id="import-bar"></div></div>
+        <div class="status-text" id="import-text"></div>
+      </div>
+    </div>
+
+    <div id="aircraft-bar" class="pills" hidden></div>
+
+    <div class="tabs" id="filter-tabs">
+      <button class="chip active" data-show="flight">飛行 <span data-count="flight">0</span></button>
+      <button class="chip" data-show="excluded">対象外 <span data-count="excluded">0</span></button>
+      <button class="chip" data-show="all">すべて <span data-count="all">0</span></button>
+    </div>
+
+    <p class="hint" id="rule-hint"></p>
+
+    <details class="card bulk" id="bulk-panel">
+      <summary>まとめて編集</summary>
+      <div class="bulk-body">
+        <div class="bulk-title">飛行の目的</div>
+        <div class="checks" id="bulk-purpose"></div>
+        <button class="btn" id="bulk-apply-purpose">選択した記録に目的を適用</button>
+        <div class="bulk-title">特定飛行</div>
+        <div class="checks" id="bulk-specified"></div>
+        <button class="btn" id="bulk-apply-specified">選択した記録に特定飛行を適用</button>
+        <p class="help">下の一覧で対象にチェックを入れてから押してください。</p>
+      </div>
+    </details>
+
+    <div id="flight-list" class="list"></div>
+
+    <div class="card export">
+      <label class="field">出力する機体
+        <select id="export-aircraft"><option value="">すべての機体</option></select>
+      </label>
+      <button class="btn primary block" id="export-btn">様式1 Excelを書き出す</button>
+      <p class="help">書き出したファイルは「ファイル」Appに保存するか、そのまま共有できます。</p>
+    </div>
+  </section>
+
+  <!-- 設定 -->
+  <section id="view-settings" hidden>
+    <div class="card">
+      <h2>基本設定</h2>
+      <label class="field">操縦者氏名
+        <input type="text" id="pilot-name" placeholder="例: 山田 太郎">
+      </label>
+      <label class="field">飛行判定：累積移動距離（m）
+        <input type="number" id="dist-threshold" min="1" step="1">
+        <span class="help">実際に飛んだ道のりがこの値以上なら「飛行」と判定します。</span>
+      </label>
+      <label class="field">飛行判定：高度（m・0で使わない）
+        <input type="number" id="alt-threshold" min="0" step="1">
+        <span class="help">GPSが測位できていない飛行は距離が0mになります。値を入れると高度でも判定します。</span>
+      </label>
+      <button class="btn primary" id="save-settings">保存</button>
+    </div>
+
+    <div class="card">
+      <h2>機体</h2>
+      <p class="help">記録を読み込むと自動で登録されます。登録記号（JU〜）を入れると日誌に反映されます。</p>
+      <div id="aircraft-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>このアプリについて</h2>
+      <p class="help">
+        飛行記録の解析から日誌の作成まで、すべてこのiPhoneの中だけで動きます。
+        飛行記録が外部に送られることはありません（住所の表示のときだけ、
+        国土地理院に座標を問い合わせます）。<br><br>
+        データはブラウザ内に保存されます。Safariの履歴・Webサイトデータを消すと
+        記録も消えるためご注意ください。
+      </p>
+      <button class="btn danger" id="clear-data">保存されている記録をすべて削除</button>
+    </div>
+  </section>
+</main>
+
+<!-- 記録の編集 -->
+<div id="editor" class="sheet" hidden>
+  <div class="sheet-head">
+    <button class="btn" id="editor-close">閉じる</button>
+    <span id="editor-title"></span>
+    <button class="btn primary" id="editor-save">保存</button>
+  </div>
+  <div class="sheet-body" id="editor-body"></div>
+</div>
+
+<script src="./vendor/xlsx.mini.min.js"></script>
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>
