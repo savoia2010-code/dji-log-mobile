@@ -5,10 +5,26 @@ const DB_VERSION = 1;
 
 let dbPromise = null;
 
+export class StorageUnavailable extends Error {}
+
 function open() {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    // プライベートブラウズや空き容量不足では IndexedDB が開けない。
+    // 無言で固まらないよう、判別できる例外にして画面に出す。
+    if (!("indexedDB" in window) || !indexedDB) {
+      reject(new StorageUnavailable("この環境では記録を保存できません"));
+      return;
+    }
+    let req;
+    try {
+      req = indexedDB.open(DB_NAME, DB_VERSION);
+    } catch (e) {
+      reject(new StorageUnavailable(String(e)));
+      return;
+    }
+    req.onblocked = () =>
+      reject(new StorageUnavailable("他のタブで開かれているため保存できません"));
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains("flights")) {
@@ -22,7 +38,7 @@ function open() {
       }
     };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => reject(new StorageUnavailable(String(req.error)));
   });
   return dbPromise;
 }

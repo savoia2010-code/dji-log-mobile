@@ -6,6 +6,10 @@ import { parseLog } from "./parser.js";
 import { reverseGeocode, formatPlace } from "./geocode.js";
 import { buildLogbook, fileNameFor, fmtDate, fmtTime, fmtDuration } from "./export.js";
 
+// 実機で「新しい版が反映されているか」を目視できるようにする。
+// 中身を変えたらここを上げる。
+export const APP_VERSION = "0.1.0";
+
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -457,8 +461,35 @@ function bind() {
   };
 }
 
-bind();
-refresh();
+function showFatal(message, detail) {
+  const box = el("div", "card");
+  box.append(el("h2", null, message));
+  box.append(el("p", "help", detail));
+  const main = document.querySelector("main");
+  main.prepend(box);
+}
+
+async function start() {
+  bind();
+  try {
+    await refresh();
+  } catch (e) {
+    if (e instanceof db.StorageUnavailable) {
+      showFatal("記録を保存できません", [
+        "Safariのプライベートブラウズでは記録を保存できません。",
+        "通常のタブで開き直してください。",
+        `（詳細: ${e.message}）`,
+      ].join(""));
+    } else {
+      showFatal("起動できませんでした", String(e && e.message || e));
+    }
+    return;
+  }
+  const v = $("#app-version");
+  if (v) v.textContent = `バージョン ${APP_VERSION}`;
+}
+
+start();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () =>
