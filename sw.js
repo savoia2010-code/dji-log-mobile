@@ -2,7 +2,7 @@
 // 解析・保存・Excel出力はすべて端末内で完結するため、
 // いったん読み込めば圏外でも使える（住所の自動入力だけは通信が要る）。
 
-const CACHE = "dji-log-mobile-v2";
+const CACHE = "dji-log-mobile-v3";
 const ASSETS = [
   "./",
   "./index.html",
@@ -56,6 +56,18 @@ self.addEventListener("fetch", (e) => {
         }
         return res;
       })
-      .catch(() => caches.match(e.request).then((hit) => hit || Response.error()))
+      .catch(async () => {
+        // ?v=2 のような問い合わせ文字列が付いていてもキャッシュに当てる
+        const hit = await caches.match(e.request, { ignoreSearch: true });
+        if (hit) return hit;
+        // ページを開く要求は、どのURLでも index.html を返して起動させる
+        if (e.request.mode === "navigate") {
+          const index = await caches.match("./index.html", { ignoreSearch: true });
+          if (index) return index;
+        }
+        return new Response("オフラインのため読み込めませんでした", {
+          status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" },
+        });
+      })
   );
 });
