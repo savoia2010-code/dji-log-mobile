@@ -1,4 +1,6 @@
 # 動作確認用に置いた飛行記録（実データ）はコミットしない
 _test/
+webkit-shot.png
 .DS_Store
 node_modules/
+package-lock.json

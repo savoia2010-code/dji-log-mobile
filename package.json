@@ -1,0 +1,12 @@
+{
+  "name": "dji-log-mobile",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 8310 --directory .",
+    "verify": "node tools/verify-webkit.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.0"
+  }
+}

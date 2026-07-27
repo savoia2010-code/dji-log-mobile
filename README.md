@@ -45,6 +45,26 @@ Mac版のフレーム解析と値が一致することを実ログで確認済�
 （ブラウザからはDJIのAPIがCORSで叩けないため、仮に復号したくてもできません。
 飛行経路の詳細な分析が必要な場合はMac版を使ってください。）
 
+## 実機に触らずに検証する
+
+iPhoneを出す前に、Safariと同じWebKitエンジンで自動検証できる。**Xcodeは不要**。
+
+```bash
+npm install
+npx playwright install webkit
+npm run serve &
+node tools/verify-webkit.mjs "path/to/DJIFlightRecord_....txt"
+```
+
+iPhone 15の画面サイズで、WASM解析・IndexedDB保存・Excel生成・レイアウト崩れ
+（横スクロール、ラベルのはみ出し）を確認し、`webkit-shot.png` を残す。
+
+実機でしか確かめられないのは次の2つだけ:
+
+- 「ファイル」App から DJI Fly → FlightRecords を選ぶ操作
+- ホーム画面に追加したときの動作（Service Workerは**HTTPSかlocalhostが必要**。
+  `http://192.168.x.x:8310` では登録されない）
+
 ## Mac版との違い
 
 | | Mac版 | iPhone単独版 |
