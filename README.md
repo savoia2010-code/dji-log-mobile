@@ -71,7 +71,7 @@ iPhone 15の画面サイズで、WASM解析・IndexedDB保存・Excel生成・�
 |---|---|---|
 | 記録の取り込み | USB接続で自動 | 「ファイル」Appから手動選択 |
 | DJI APIキー | 必要 | 不要 |
-| 住所 | 番地（街区・地番）まで | 町丁目まで |
+| 住所 | 番地（街区・地番）まで | 番地（地番）まで |
 | 飛行経路の解析 | あり（最大変位など） | なし |
 | 飛行日誌の作成 | ○ | ○ |
 
@@ -102,6 +102,7 @@ iPhone 15の画面サイズで、WASM解析・IndexedDB保存・Excel生成・�
 - `js/parser.js` — WASM版 dji-log-parser でログを解析
 - `js/db.js` — IndexedDB への保存と飛行判定
 - `js/geocode.js` — 国土地理院の逆ジオコーダ
+- `js/parcels.js` — 法務省 登記所備付地図データから地番を引く
 - `js/export.js` — 様式1のExcel生成（SheetJS）
 - `vendor/` — dji-log-parser (MIT) / SheetJS (Apache-2.0)
 - `data/muni.json` — 市区町村コード表（国土地理院）
