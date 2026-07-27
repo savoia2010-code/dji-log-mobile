@@ -20,8 +20,16 @@ const context = await browser.newContext({ ...devices["iPhone 15"] });
 const page = await context.newPage();
 
 const problems = [];
+// Playwright はスクリーンショット時にCSSを注入するため、CSPの
+// スタイル違反が1件出る。アプリ側の問題ではないので除く。
+const isHarnessNoise = (t) => t.includes("Refused to apply a stylesheet");
+
 page.on("pageerror", (e) => problems.push(`実行時エラー: ${e}`));
-page.on("console", (m) => { if (m.type() === "error") problems.push(`コンソール: ${m.text()}`); });
+page.on("console", (m) => {
+  if (m.type() === "error" && !isHarnessNoise(m.text())) {
+    problems.push(`コンソール: ${m.text()}`);
+  }
+});
 
 await page.goto(URL, { waitUntil: "networkidle" });
 await page.waitForTimeout(800);

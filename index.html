@@ -2,6 +2,24 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
+<!--
+  多層防御。読み込んだ飛行記録は信用できない入力として扱う前提で、
+  外部スクリプトの読み込みと、国土地理院以外への送信を禁じる。
+  wasm-unsafe-eval はログ解析(WebAssembly)の実行に必要。
+-->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'wasm-unsafe-eval';
+  style-src 'self';
+  img-src 'self' data:;
+  connect-src 'self' https://mreversegeocoder.gsi.go.jp;
+  object-src 'none';
+  base-uri 'self';
+  form-action 'none'">
+<!-- frame-ancestors はmetaでは無効（HTTPヘッダー専用）。GitHub Pagesでは
+     ヘッダーを設定できないため、埋め込み防止は付けられない。
+     このアプリは入力を受け付けるフォームを持たないため実害は小さい。 -->
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
