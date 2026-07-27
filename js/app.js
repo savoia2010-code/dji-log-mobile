@@ -8,7 +8,7 @@ import { buildLogbook, fileNameFor, fmtDate, fmtTime, fmtDuration } from "./expo
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.1.0";
+export const APP_VERSION = "0.2.0";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -451,6 +451,32 @@ function bind() {
     await db.setSetting("altitudeThresholdM", Number($("#alt-threshold").value) || 0);
     await refresh();
     alert("保存しました。");
+  };
+
+  $("#regeocode").onclick = async () => {
+    const btn = $("#regeocode");
+    const box = $("#regeocode-status");
+    const bar = $("#regeocode-bar");
+    const text = $("#regeocode-text");
+    const targets = (await db.getAllFlights()).filter((f) => f.lat != null);
+    if (!targets.length) { alert("住所を取り直す記録がありません。"); return; }
+
+    btn.disabled = true;
+    box.hidden = false;
+    let updated = 0;
+    for (let i = 0; i < targets.length; i++) {
+      const f = targets[i];
+      bar.style.width = `${Math.round((i / targets.length) * 100)}%`;
+      text.textContent = `${i + 1} / ${targets.length} 件目…`;
+      await new Promise((r) => setTimeout(r, 0));
+      const place = await reverseGeocode(f.lat, f.lon);
+      if (place && place !== f.place) { f.place = place; await db.putFlight(f); updated++; }
+    }
+    bar.style.width = "100%";
+    text.textContent = `完了：${targets.length} 件を確認し、${updated} 件を更新しました`;
+    btn.disabled = false;
+    await refresh();
+    renderSettings();
   };
 
   $("#clear-data").onclick = async () => {
