@@ -10,9 +10,13 @@ const URL_TEMPLATE =
 
 const SEARCH_DEG = 0.0015; // 約165m四方
 const MAX_M = 150;
-const TIMEOUT_MS = 15000;
+const TIMEOUT_MS = 25000;
+// 2.4GBのファイルへのレンジ取得なので単発で失敗することがある。
+// 1回の失敗で諦めると以後ずっと番地が出なくなるため、続けて失敗した
+// ときだけ打ち切る。
+const GIVE_UP_AFTER = 3;
 
-const failedPrefs = new Set();
+const failCount = new Map();
 
 function haversineM(lat1, lon1, lat2, lon2) {
   const R = 6371000;
@@ -29,7 +33,8 @@ function haversineM(lat1, lon1, lat2, lon2) {
  * 突き合わせて、別の町の地番を拾っていないか確認すること。
  */
 export async function nearest(prefCode, lat, lon) {
-  if (!prefCode || failedPrefs.has(prefCode)) return null;
+  if (!prefCode) return null;
+  if ((failCount.get(prefCode) || 0) >= GIVE_UP_AFTER) return null;
   if (typeof flatgeobuf === "undefined") return null;
 
   const url = URL_TEMPLATE.replace("{pref}", prefCode);
@@ -60,8 +65,9 @@ export async function nearest(prefCode, lat, lon) {
     }
   } catch (e) {
     console.warn("地番データを取得できませんでした:", e);
-    failedPrefs.add(prefCode);
+    failCount.set(prefCode, (failCount.get(prefCode) || 0) + 1);
     return null;
   }
+  failCount.delete(prefCode); // 成功したら失敗回数を戻す
   return best;
 }
