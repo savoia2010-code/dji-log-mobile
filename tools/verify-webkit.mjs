@@ -33,6 +33,8 @@ page.on("console", (m) => {
 
 await page.goto(URL, { waitUntil: "networkidle" });
 await page.waitForTimeout(800);
+// 起動時は「携行」タブなので、飛行記録の一覧に切り替えてから確かめる
+await page.click('.tab-btn[data-view="list"]');
 
 const env = await page.evaluate(() => ({
   WASM: typeof WebAssembly !== "undefined",

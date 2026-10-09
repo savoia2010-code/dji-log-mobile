@@ -150,6 +150,23 @@ main { padding: 12px; max-width: 900px; margin: 0 auto; }
 }
 .badge.warn { background: #fdeceb; color: var(--warn); }
 
+/* 携行（提示用） */
+.install-warning { border-color: #f0d9a0; background: #fff8e1; }
+.section > .section-title { font-weight: 600; font-size: 16px; cursor: pointer; }
+.rec { border-top: 1px solid var(--border); padding: 10px 0; }
+.rec > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; cursor: pointer; }
+.rec > summary .date { font-weight: 600; }
+.rec > summary .meta { color: var(--muted); font-size: 13px; }
+.kv { display: flex; gap: 10px; font-size: 14px; margin-top: 6px; }
+.kv .label { color: var(--muted); font-size: 12.5px; flex: none; min-width: 6.5em; }
+.items { margin-top: 8px; font-size: 14px; }
+.items .item { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed var(--border); }
+.items .okt { color: var(--ok); font-weight: 600; }
+.items .ng { color: var(--warn); font-weight: 700; }
+.items .muted { color: var(--muted); }
+.item-remark { color: var(--muted); font-size: 13px; padding: 2px 0 2px 8px; }
+.warn-text { color: var(--warn); }
+
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #14171c; --card: #1c2027; --text: #e6e9ee; --muted: #98a2ae;
@@ -162,4 +179,5 @@ main { padding: 12px; max-width: 900px; margin: 0 auto; }
   .badge.muted { background: #262b33; }
   .badge.manual { background: #322a12; color: #e8c96a; }
   .badge.warn { background: #3a1a18; color: #f2a59f; }
+  .install-warning { background: #2e2814; border-color: #5a4a1c; }
 }

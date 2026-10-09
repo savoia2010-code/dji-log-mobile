@@ -3,7 +3,7 @@
 // 点検は飛行前に現場で行うので、iPhoneで記録しておき、あとからMac版へ送る。
 // このアプリはインターネット上に置かれ、Mac版はMacの中で動くため直接は
 // つながらない。そこで記録をファイルに書き出し、共有メニューから
-// iCloud Drive の「dji-log 点検記録」フォルダに保存してもらう。Mac版がその
+// iCloud Drive の「dji-log 飛行日誌」フォルダに保存してもらう。Mac版がその
 // フォルダを見に行って取り込む。
 //
 // 記録ごとに識別子(id)と更新日時を持たせ、Mac版は同じidなら新しい方を採る。
@@ -34,7 +34,8 @@ const isUnsent = (r) => !r.sentAt || r.updatedAt > r.sentAt;
 
 let editing = null;
 
-function summary(r) {
+export function inspectionSummary(results) {
+  const r = { results };
   const abnormal = DAILY_INSPECTION_ITEMS.map(([n]) => n).filter((n) => r.results[n] === "異常");
   if (abnormal.length) return { text: `異常あり（${abnormal.join("、")}）`, cls: "warn" };
   const blank = DAILY_INSPECTION_ITEMS.filter(([n]) => !r.results[n]).length;
@@ -54,7 +55,7 @@ export async function renderInspections() {
 
   $("#insp-send").textContent = unsent ? `Macへ送る（未送信 ${unsent}件）` : "Macへ送る";
   $("#insp-send-help").textContent = unsent
-    ? "共有メニューの「\"ファイル\"に保存」から、iCloud Drive の「dji-log 点検記録」フォルダに保存してください。Mac版が自動で取り込みます。"
+    ? "共有メニューの「\"ファイル\"に保存」から、iCloud Drive の「dji-log 飛行日誌」フォルダに保存してください。Mac版が自動で取り込みます。"
     : "すべて送信済みです。";
 
   const box = $("#insp-list");
@@ -69,7 +70,7 @@ export async function renderInspections() {
     const line1 = el("div", "line1");
     line1.append(el("span", "date", r.date));
     line1.append(el("span", "meta", r.aircraftName || "機体未選択"));
-    const s = summary(r);
+    const s = inspectionSummary(r.results);
     line1.append(el("span", `badge ${s.cls}`, s.text));
     line1.append(el("span", `badge ${isUnsent(r) ? "manual" : "muted"}`,
       isUnsent(r) ? "未送信" : "送信済み"));
@@ -114,7 +115,12 @@ async function openInspection(id) {
   const acSel = el("select");
   acSel.id = "in-aircraft";
   acSel.append(new Option("選んでください", ""));
-  for (const a of aircraft) acSel.append(new Option(aircraftLabel(a), a.serial));
+  const names = aircraft.map(aircraftLabel);
+  aircraft.forEach((a, i) => {
+    // 登録記号が未入力で同じ型式の機体が2台あると見分けられないので、シリアル末尾を添える
+    const dup = names.filter((n) => n === names[i]).length > 1;
+    acSel.append(new Option(dup ? `${names[i]}（S/N …${a.serial.slice(-4)}）` : names[i], a.serial));
+  });
   acSel.append(new Option("一覧にない機体（名前を入力）", OTHER));
   acSel.value = r.aircraftSerial || (r.aircraftName ? OTHER : "");
   const acName = el("input");

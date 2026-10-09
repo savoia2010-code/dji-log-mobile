@@ -40,3 +40,10 @@ export const POST_FLIGHT_OK = "飛行後点検：異常なし";
 // Mac版へ送るファイルの形式。Mac版の app/icloud.py と合わせること。
 export const SYNC_FORMAT = "dji-log-inspections";
 export const SYNC_VERSION = 1;
+
+// Mac版から受け取る携行用ファイルの形式。Mac版の app/carry.py と合わせること。
+export const CARRY_FORMAT = "dji-log-carry";
+export const CARRY_VERSION = 1;
+
+// iCloud Drive 上のフォルダ名（Mac版の app/icloud.py と合わせること）
+export const ICLOUD_FOLDER = "dji-log 飛行日誌";

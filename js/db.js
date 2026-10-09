@@ -2,7 +2,8 @@
 
 const DB_NAME = "dji-log-mobile";
 // 2: 日常点検記録（inspections）を追加
-const DB_VERSION = 2;
+// 3: Mac版から受け取った携行用の飛行日誌（carry）を追加
+const DB_VERSION = 3;
 
 let dbPromise = null;
 
@@ -39,6 +40,9 @@ function open() {
       }
       if (!db.objectStoreNames.contains("inspections")) {
         db.createObjectStore("inspections", { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains("carry")) {
+        db.createObjectStore("carry", { keyPath: "key" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -95,6 +99,11 @@ export async function putInspections(records) {
   });
 }
 
+// Mac版から受け取った携行用の飛行日誌。常に最新の1つだけを持つ。
+export const getCarry = () => tx("carry", "readonly", (s) => s.get("latest"));
+export const putCarry = (data) =>
+  tx("carry", "readwrite", (s) => s.put({ key: "latest", data, receivedAt: new Date().toISOString() }));
+
 const DEFAULT_SETTINGS = {
   pilotName: "",
   distanceThresholdM: 8,
@@ -126,6 +135,24 @@ export async function ensureAircraft(serial, name) {
   await putAircraft({
     serial, name: name || "", registration: "", model: "", initialFlightSeconds: 0,
   });
+}
+
+/**
+ * Mac版から受け取った機体を登録する。日常点検でその機体を選べるようにするため。
+ * 登録記号・型式はMac版の値で更新する（記録の大元はMac版にあるため）。
+ */
+export async function mergeAircraftFromMac(list) {
+  for (const a of list) {
+    if (!a.serial) continue;
+    const existing = await tx("aircraft", "readonly", (s) => s.get(a.serial));
+    await putAircraft({
+      serial: a.serial,
+      name: (existing && existing.name) || a.name || "",
+      registration: a.registration || (existing && existing.registration) || "",
+      model: a.model || (existing && existing.model) || "",
+      initialFlightSeconds: (existing && existing.initialFlightSeconds) || 0,
+    });
+  }
 }
 
 /** 日誌に載せる「飛行」か。累積移動距離で判定し、高度しきい値は任意で併用。 */

@@ -6,10 +6,11 @@ import { parseLog } from "./parser.js";
 import { reverseGeocode, formatPlace } from "./geocode.js";
 import { buildLogbook, fileNameFor, fmtDate, fmtTime, fmtDuration } from "./export.js";
 import { bindInspections, renderInspections } from "./inspections.js";
+import { bindCarry, protectStorage, renderCarry } from "./carry.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.5.0";
+export const APP_VERSION = "0.6.0";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -421,11 +422,13 @@ function bind() {
     b.onclick = () => {
       document.querySelectorAll(".tab-btn").forEach((x) => x.classList.toggle("active", x === b));
       const v = b.dataset.view;
+      $("#view-carry").hidden = v !== "carry";
       $("#view-list").hidden = v !== "list";
       $("#view-inspections").hidden = v !== "inspections";
       $("#view-settings").hidden = v !== "settings";
       if (v === "settings") renderSettings();
       if (v === "inspections") renderInspections();
+      if (v === "carry") renderCarry();
     };
   }
 
@@ -445,6 +448,7 @@ function bind() {
     () => applyBulk("specifiedFlight", chosen($("#bulk-specified")));
 
   bindInspections();
+  bindCarry();
 
   $("#editor-close").onclick = () => { $("#editor").hidden = true; state.editing = null; };
   $("#editor-save").onclick = saveEditor;
@@ -518,6 +522,12 @@ async function start() {
   }
   const v = $("#app-version");
   if (v) v.textContent = `バージョン ${APP_VERSION}`;
+  try {
+    await renderCarry();
+    await protectStorage();
+  } catch (e) {
+    showFatal("携行用の日誌を表示できませんでした", String(e && e.message || e));
+  }
 }
 
 start();

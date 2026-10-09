@@ -35,15 +35,42 @@
 <header class="topbar">
   <span class="brand">🛩 飛行日誌</span>
   <nav>
-    <button class="tab-btn active" data-view="list">記録</button>
+    <button class="tab-btn active" data-view="carry">携行</button>
     <button class="tab-btn" data-view="inspections">点検</button>
+    <button class="tab-btn" data-view="list">記録</button>
     <button class="tab-btn" data-view="settings">設定</button>
   </nav>
 </header>
 
 <main>
+  <!-- 記録が消されないよう、ホーム画面への追加を促す（carry.js が出し分ける） -->
+  <div class="card install-warning" hidden>
+    <h2>ホーム画面に追加してください</h2>
+    <p class="help" style="margin-top:0">
+      飛行日誌は法令で携行が求められる記録です。Safariで開いたままだと、
+      しばらく使わないうちに保存した記録が消されることがあります。
+      共有ボタン →「ホーム画面に追加」から開いて使ってください。
+    </p>
+  </div>
+
+  <!-- 携行（提示用） -->
+  <section id="view-carry">
+    <div class="card">
+      <label class="btn primary block">
+        Macから受け取る
+        <input type="file" id="carry-input" accept=".json,application/json" hidden>
+      </label>
+      <p class="help">
+        「ファイル」の選択画面で iCloud Drive →「dji-log 飛行日誌」→「携行用」→
+        <b>飛行日誌_携行用.json</b> を選んでください。Macで記録を直したら、受け取り直します。
+      </p>
+      <p class="help" id="carry-info"></p>
+    </div>
+    <div id="carry-body"></div>
+  </section>
+
   <!-- 一覧 -->
-  <section id="view-list">
+  <section id="view-list" hidden>
     <div class="card import">
       <label class="btn primary block">
         飛行記録を読み込む
