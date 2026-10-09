@@ -17,3 +17,26 @@ export const SPECIFIED_FLIGHTS = [
 ];
 
 export const display = (list) => (list || []).join("、");
+
+// 様式2「日常点検記録」の点検項目（取扱要領の様式の原文どおり。Mac版と同じ）。
+export const DAILY_INSPECTION_ITEMS = [
+  ["機体全般", "機器の取り付け状態（ネジ、コネクタ、ケーブル等）"],
+  ["プロペラ", "外観、損傷、ゆがみ"],
+  ["フレーム", "外観、損傷、ゆがみ"],
+  ["通信系統", "機体と操縦装置の通信品質の健全性"],
+  ["推進系統", "モーター又は発動機の健全性"],
+  ["電源系統", "機体及び操縦装置の電源の健全性"],
+  ["自動制御系統", "飛行制御装置の健全性"],
+  ["操縦装置", "外観、スティックの健全性、スイッチの健全性"],
+  ["バッテリー、燃料", "バッテリーの充電状況、残燃料表示機能の健全性"],
+];
+
+// 結果欄は「正常」又は「異常」等の文言で記入する（要領 7.(2)b)）
+export const INSPECTION_RESULTS = ["正常", "異常"];
+
+// 特記事項の記入例（要領 7.(2)d)）
+export const POST_FLIGHT_OK = "飛行後点検：異常なし";
+
+// Mac版へ送るファイルの形式。Mac版の app/icloud.py と合わせること。
+export const SYNC_FORMAT = "dji-log-inspections";
+export const SYNC_VERSION = 1;

@@ -1,7 +1,8 @@
 // IndexedDB への保存。飛行記録・設定・機体をブラウザ内に持つ（サーバー不要）。
 
 const DB_NAME = "dji-log-mobile";
-const DB_VERSION = 1;
+// 2: 日常点検記録（inspections）を追加
+const DB_VERSION = 2;
 
 let dbPromise = null;
 
@@ -35,6 +36,9 @@ function open() {
       }
       if (!db.objectStoreNames.contains("aircraft")) {
         db.createObjectStore("aircraft", { keyPath: "serial" });
+      }
+      if (!db.objectStoreNames.contains("inspections")) {
+        db.createObjectStore("inspections", { keyPath: "id" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -72,6 +76,23 @@ export async function putFlights(flights) {
 
 export async function hasFlight(fileName) {
   return (await getFlight(fileName)) !== undefined;
+}
+
+// 日常点検記録。id は端末で作る識別子で、Mac版へ送ったときの重複防止に使う。
+export const getAllInspections = () => tx("inspections", "readonly", (s) => s.getAll());
+export const getInspection = (id) => tx("inspections", "readonly", (s) => s.get(id));
+export const putInspection = (r) => tx("inspections", "readwrite", (s) => s.put(r));
+export const deleteInspection = (id) => tx("inspections", "readwrite", (s) => s.delete(id));
+
+export async function putInspections(records) {
+  const db = await open();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction("inspections", "readwrite");
+    const store = t.objectStore("inspections");
+    for (const r of records) store.put(r);
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+  });
 }
 
 const DEFAULT_SETTINGS = {

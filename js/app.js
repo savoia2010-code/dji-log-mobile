@@ -5,10 +5,11 @@ import * as db from "./db.js";
 import { parseLog } from "./parser.js";
 import { reverseGeocode, formatPlace } from "./geocode.js";
 import { buildLogbook, fileNameFor, fmtDate, fmtTime, fmtDuration } from "./export.js";
+import { bindInspections, renderInspections } from "./inspections.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.4.0";
+export const APP_VERSION = "0.5.0";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -421,8 +422,10 @@ function bind() {
       document.querySelectorAll(".tab-btn").forEach((x) => x.classList.toggle("active", x === b));
       const v = b.dataset.view;
       $("#view-list").hidden = v !== "list";
+      $("#view-inspections").hidden = v !== "inspections";
       $("#view-settings").hidden = v !== "settings";
       if (v === "settings") renderSettings();
+      if (v === "inspections") renderInspections();
     };
   }
 
@@ -440,6 +443,8 @@ function bind() {
   $("#bulk-apply-purpose").onclick = () => applyBulk("purpose", chosen($("#bulk-purpose")));
   $("#bulk-apply-specified").onclick =
     () => applyBulk("specifiedFlight", chosen($("#bulk-specified")));
+
+  bindInspections();
 
   $("#editor-close").onclick = () => { $("#editor").hidden = true; state.editing = null; };
   $("#editor-save").onclick = saveEditor;

@@ -127,6 +127,29 @@ main { padding: 12px; max-width: 900px; margin: 0 auto; }
 .aircraft-item { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
 .aircraft-item:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
 
+/* 日常点検 */
+.btn.small { padding: 6px 12px; font-size: 13px; border-radius: 8px; margin-top: 8px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.card-head h2 { margin: 0; }
+.card-head .btn.small { margin-top: 0; }
+.insp-item { border-top: 1px solid var(--border); padding: 10px 0; }
+.insp-item:first-of-type { margin-top: 10px; }
+.insp-name { font-size: 14px; margin-bottom: 6px; }
+.insp-name .meta { color: var(--muted); font-size: 12.5px; }
+.insp-item .checks { gap: 8px 22px; }
+.insp-item .chk input { width: 20px; height: 20px; }
+.insp-remark {
+  display: block; width: 100%; font: inherit; font-size: 14px; margin-top: 8px;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--input-bg); color: var(--text);
+}
+.field input[type=date] {
+  display: block; width: 100%; font: inherit; margin-top: 4px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--input-bg); color: var(--text);
+}
+.badge.warn { background: #fdeceb; color: var(--warn); }
+
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #14171c; --card: #1c2027; --text: #e6e9ee; --muted: #98a2ae;
@@ -138,4 +161,5 @@ main { padding: 12px; max-width: 900px; margin: 0 auto; }
   .badge.ok { background: #16311f; }
   .badge.muted { background: #262b33; }
   .badge.manual { background: #322a12; color: #e8c96a; }
+  .badge.warn { background: #3a1a18; color: #f2a59f; }
 }

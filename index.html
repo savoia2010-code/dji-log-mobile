@@ -36,6 +36,7 @@
   <span class="brand">🛩 飛行日誌</span>
   <nav>
     <button class="tab-btn active" data-view="list">記録</button>
+    <button class="tab-btn" data-view="inspections">点検</button>
     <button class="tab-btn" data-view="settings">設定</button>
   </nav>
 </header>
@@ -90,6 +91,22 @@
       <button class="btn primary block" id="export-btn">様式1 Excelを書き出す</button>
       <p class="help">書き出したファイルは「ファイル」Appに保存するか、そのまま共有できます。</p>
     </div>
+  </section>
+
+  <!-- 日常点検 -->
+  <section id="view-inspections" hidden>
+    <div class="card">
+      <button class="btn primary block" id="insp-new">点検を記録する</button>
+      <p class="help">
+        飛行前に行った日常点検（様式2）を記録します。電波のない場所でも記録できます。
+        実際に点検した結果だけを記録してください。
+      </p>
+    </div>
+    <div class="card">
+      <button class="btn block" id="insp-send">Macへ送る</button>
+      <p class="help" id="insp-send-help"></p>
+    </div>
+    <div id="insp-list" class="list"></div>
   </section>
 
   <!-- 設定 -->
@@ -154,6 +171,16 @@
     <button class="btn primary" id="editor-save">保存</button>
   </div>
   <div class="sheet-body" id="editor-body"></div>
+</div>
+
+<!-- 日常点検の入力 -->
+<div id="insp-editor" class="sheet" hidden>
+  <div class="sheet-head">
+    <button class="btn" id="insp-close">閉じる</button>
+    <span id="insp-title"></span>
+    <button class="btn primary" id="insp-save">保存</button>
+  </div>
+  <div class="sheet-body" id="insp-body"></div>
 </div>
 
 <script src="./vendor/xlsx.mini.min.js"></script>

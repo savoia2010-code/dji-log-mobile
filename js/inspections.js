@@ -1,0 +1,354 @@
+// 日常点検記録（様式2）。
+//
+// 点検は飛行前に現場で行うので、iPhoneで記録しておき、あとからMac版へ送る。
+// このアプリはインターネット上に置かれ、Mac版はMacの中で動くため直接は
+// つながらない。そこで記録をファイルに書き出し、共有メニューから
+// iCloud Drive の「dji-log 点検記録」フォルダに保存してもらう。Mac版がその
+// フォルダを見に行って取り込む。
+//
+// 記録ごとに識別子(id)と更新日時を持たせ、Mac版は同じidなら新しい方を採る。
+// 同じファイルを何度送っても重複しない。
+
+import {
+  DAILY_INSPECTION_ITEMS, INSPECTION_RESULTS, POST_FLIGHT_OK, SYNC_FORMAT, SYNC_VERSION,
+} from "./constants.js";
+import * as db from "./db.js";
+import { reverseGeocode } from "./geocode.js";
+
+const $ = (sel) => document.querySelector(sel);
+const el = (tag, cls, text) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+};
+const pad = (n) => String(n).padStart(2, "0");
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+const OTHER = "__other__";
+
+// 送った後に直した記録も「未送信」として扱う
+const isUnsent = (r) => !r.sentAt || r.updatedAt > r.sentAt;
+
+let editing = null;
+
+function summary(r) {
+  const abnormal = DAILY_INSPECTION_ITEMS.map(([n]) => n).filter((n) => r.results[n] === "異常");
+  if (abnormal.length) return { text: `異常あり（${abnormal.join("、")}）`, cls: "warn" };
+  const blank = DAILY_INSPECTION_ITEMS.filter(([n]) => !r.results[n]).length;
+  if (blank) return { text: `未記入 ${blank}項目`, cls: "muted" };
+  return { text: "全項目 正常", cls: "ok" };
+}
+
+const aircraftLabel = (a) =>
+  a.registration ? `${a.name || a.serial}（${a.registration}）` : (a.name || a.serial);
+
+// ---------- 一覧 ----------
+
+export async function renderInspections() {
+  const list = (await db.getAllInspections())
+    .sort((a, b) => (b.date + b.updatedAt).localeCompare(a.date + a.updatedAt));
+  const unsent = list.filter(isUnsent).length;
+
+  $("#insp-send").textContent = unsent ? `Macへ送る（未送信 ${unsent}件）` : "Macへ送る";
+  $("#insp-send-help").textContent = unsent
+    ? "共有メニューの「\"ファイル\"に保存」から、iCloud Drive の「dji-log 点検記録」フォルダに保存してください。Mac版が自動で取り込みます。"
+    : "すべて送信済みです。";
+
+  const box = $("#insp-list");
+  box.innerHTML = "";
+  if (!list.length) {
+    box.append(el("div", "empty", "点検の記録はまだありません。"));
+    return;
+  }
+  for (const r of list) {
+    const row = el("div", "row");
+    const body = el("div", "body");
+    const line1 = el("div", "line1");
+    line1.append(el("span", "date", r.date));
+    line1.append(el("span", "meta", r.aircraftName || "機体未選択"));
+    const s = summary(r);
+    line1.append(el("span", `badge ${s.cls}`, s.text));
+    line1.append(el("span", `badge ${isUnsent(r) ? "manual" : "muted"}`,
+      isUnsent(r) ? "未送信" : "送信済み"));
+    body.append(line1);
+    body.append(el("div", "meta", [r.inspector, r.place].filter(Boolean).join(" ／ ") || "—"));
+    body.onclick = () => openInspection(r.id);
+    row.append(body);
+    box.append(row);
+  }
+}
+
+// ---------- 入力 ----------
+
+async function openInspection(id) {
+  const settings = await db.getSettings();
+  const aircraft = await db.getAllAircraft();
+  let r = id ? await db.getInspection(id) : null;
+  const isNew = !r;
+  if (!r) {
+    // 機体は前回点検した機体を初期値にする（同じ機体を続けて使うことが多い）
+    const last = aircraft.find((a) => a.serial === settings.lastInspectionAircraft);
+    r = {
+      id: crypto.randomUUID(),
+      aircraftSerial: last ? last.serial : "",
+      aircraftName: last ? (last.name || last.serial) : "",
+      date: today(), place: "", inspector: settings.pilotName || "",
+      results: {}, itemRemarks: {}, notes: "",
+      createdAt: new Date().toISOString(), updatedAt: "", sentAt: "",
+    };
+  }
+  editing = { record: r, isNew };
+
+  $("#insp-title").textContent = isNew ? "日常点検を記録" : r.date;
+  const body = $("#insp-body");
+  body.innerHTML = "";
+
+  // 実施
+  const c1 = el("div", "card");
+  c1.append(el("h2", null, "実施"));
+
+  const acField = el("label", "field", "機体");
+  const acSel = el("select");
+  acSel.id = "in-aircraft";
+  acSel.append(new Option("選んでください", ""));
+  for (const a of aircraft) acSel.append(new Option(aircraftLabel(a), a.serial));
+  acSel.append(new Option("一覧にない機体（名前を入力）", OTHER));
+  acSel.value = r.aircraftSerial || (r.aircraftName ? OTHER : "");
+  const acName = el("input");
+  acName.type = "text"; acName.id = "in-aircraft-name";
+  acName.placeholder = "例: DJI Mini 4 Pro";
+  acName.value = r.aircraftSerial ? "" : r.aircraftName;
+  acName.hidden = acSel.value !== OTHER;
+  acSel.onchange = () => { acName.hidden = acSel.value !== OTHER; };
+  acField.append(acSel, acName);
+  if (!aircraft.length) {
+    acField.append(el("span", "help",
+      "飛行記録を読み込むと、機体が一覧に出ます。まだなら「一覧にない機体」で名前を入れてください。"));
+  }
+  c1.append(acField);
+
+  const dateField = el("label", "field", "実施年月日");
+  const dateIn = el("input");
+  dateIn.type = "date"; dateIn.id = "in-date"; dateIn.value = r.date;
+  dateField.append(dateIn);
+  c1.append(dateField);
+
+  const placeField = el("label", "field", "実施場所");
+  const placeIn = el("input");
+  placeIn.type = "text"; placeIn.id = "in-place"; placeIn.value = r.place;
+  placeIn.placeholder = "例: ○○公園";
+  const locBtn = el("button", "btn small", "現在地の住所を入れる");
+  locBtn.type = "button";
+  locBtn.onclick = () => fillPlace(placeIn, locBtn);
+  placeField.append(placeIn, locBtn);
+  c1.append(placeField);
+
+  const whoField = el("label", "field", "実施者");
+  const whoIn = el("input");
+  whoIn.type = "text"; whoIn.id = "in-inspector"; whoIn.value = r.inspector;
+  whoField.append(whoIn);
+  c1.append(whoField);
+  body.append(c1);
+
+  // 点検結果
+  const c2 = el("div", "card");
+  const head = el("div", "card-head");
+  head.append(el("h2", null, "点検結果"));
+  const allOk = el("button", "btn small", "すべて「正常」");
+  allOk.type = "button";
+  allOk.onclick = () => body.querySelectorAll('input[type=radio][value="正常"]')
+    .forEach((i) => { i.checked = true; });
+  head.append(allOk);
+  c2.append(head);
+  DAILY_INSPECTION_ITEMS.forEach(([name, desc], i) => {
+    const item = el("div", "insp-item");
+    const title = el("div", "insp-name");
+    title.append(el("b", null, name), el("span", "meta", ` ${desc}`));
+    item.append(title);
+    const choices = el("div", "checks");
+    for (const v of INSPECTION_RESULTS) {
+      const l = el("label", "chk");
+      const radio = el("input");
+      radio.type = "radio"; radio.name = `res-${i}`; radio.value = v;
+      radio.checked = r.results[name] === v;
+      l.append(radio, document.createTextNode(v));
+      choices.append(l);
+    }
+    item.append(choices);
+    const remark = el("input");
+    remark.type = "text"; remark.className = "insp-remark"; remark.id = `rem-${i}`;
+    remark.placeholder = "備考（任意）";
+    remark.value = r.itemRemarks[name] || "";
+    item.append(remark);
+    c2.append(item);
+  });
+  body.append(c2);
+
+  // 特記事項
+  const c3 = el("div", "card");
+  c3.append(el("h2", null, "特記事項"));
+  const notes = el("textarea");
+  notes.id = "in-notes"; notes.rows = 3; notes.value = r.notes;
+  notes.placeholder = "点検で見つけた不具合など。飛行後点検を行った場合はその結果も記入します。";
+  const notesField = el("label", "field");
+  notesField.append(notes);
+  c3.append(notesField);
+  const pf = el("button", "btn small", `「${POST_FLIGHT_OK}」を追記`);
+  pf.type = "button";
+  pf.onclick = () => {
+    if (!notes.value.includes(POST_FLIGHT_OK)) {
+      notes.value = notes.value ? `${notes.value.trimEnd()}\n${POST_FLIGHT_OK}` : POST_FLIGHT_OK;
+    }
+  };
+  c3.append(pf);
+  if (!isNew) {
+    const del = el("button", "btn danger block", "この点検記録を削除");
+    del.type = "button";
+    del.style.marginTop = "16px";
+    del.onclick = async () => {
+      const sent = !isUnsent(r);
+      if (!confirm(sent
+        ? "この点検記録をiPhoneから削除します（Macに送った分は残ります）。よろしいですか？"
+        : "この点検記録を削除します。まだMacに送っていません。よろしいですか？")) return;
+      await db.deleteInspection(r.id);
+      closeInspection();
+      await renderInspections();
+    };
+    c3.append(del);
+  }
+  body.append(c3);
+
+  $("#insp-editor").hidden = false;
+  body.scrollTop = 0;
+}
+
+async function fillPlace(input, btn) {
+  if (!navigator.geolocation) {
+    alert("この端末では現在地を取得できません。");
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = "現在地を取得しています…";
+  try {
+    const pos = await new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject,
+        { enableHighAccuracy: true, timeout: 15000 }));
+    const { latitude: lat, longitude: lon } = pos.coords;
+    const place = await reverseGeocode(lat, lon);
+    // 圏外などで住所が引けなければ座標を入れる（あとで直せる）
+    input.value = place || `(${lat.toFixed(5)}, ${lon.toFixed(5)})`;
+  } catch (e) {
+    alert(e && e.code === 1
+      ? "位置情報の利用が許可されていません。「設定」→「プライバシーとセキュリティ」→「位置情報サービス」で許可してください。"
+      : "現在地を取得できませんでした。手で入力してください。");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "現在地の住所を入れる";
+  }
+}
+
+function closeInspection() {
+  $("#insp-editor").hidden = true;
+  editing = null;
+}
+
+async function saveInspection() {
+  if (!editing) return;
+  const r = editing.record;
+  const aircraft = await db.getAllAircraft();
+  const sel = $("#in-aircraft").value;
+  if (!sel) { alert("機体を選んでください。"); return; }
+  if (sel === OTHER) {
+    const name = $("#in-aircraft-name").value.trim();
+    if (!name) { alert("機体の名前を入力してください。"); return; }
+    r.aircraftSerial = ""; r.aircraftName = name;
+  } else {
+    const a = aircraft.find((x) => x.serial === sel);
+    r.aircraftSerial = sel; r.aircraftName = a ? (a.name || a.serial) : sel;
+    await db.setSetting("lastInspectionAircraft", sel);
+  }
+  const date = $("#in-date").value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { alert("実施年月日を入力してください。"); return; }
+  r.date = date;
+  r.place = $("#in-place").value.trim();
+  r.inspector = $("#in-inspector").value.trim();
+  r.results = {};
+  r.itemRemarks = {};
+  DAILY_INSPECTION_ITEMS.forEach(([name], i) => {
+    const checked = document.querySelector(`input[name="res-${i}"]:checked`);
+    if (checked) r.results[name] = checked.value;
+    const rem = $(`#rem-${i}`).value.trim();
+    if (rem) r.itemRemarks[name] = rem;
+  });
+  r.notes = $("#in-notes").value.trim();
+  r.updatedAt = new Date().toISOString();
+
+  const blank = DAILY_INSPECTION_ITEMS.filter(([n]) => !r.results[n]).length;
+  if (blank && !confirm(`結果が未記入の項目が ${blank} 個あります。このまま保存しますか？`)) return;
+
+  await db.putInspection(r);
+  closeInspection();
+  await renderInspections();
+}
+
+// ---------- Macへ送る ----------
+
+async function sendToMac() {
+  const all = await db.getAllInspections();
+  let targets = all.filter(isUnsent);
+  if (!targets.length) {
+    if (!all.length) { alert("送る点検記録がありません。"); return; }
+    if (!confirm("未送信の記録はありません。すべての記録を送り直しますか？（Mac側で重複はしません）")) return;
+    targets = all;
+  }
+
+  const payload = {
+    format: SYNC_FORMAT,
+    version: SYNC_VERSION,
+    exportedAt: new Date().toISOString(),
+    inspections: targets.map(({ sentAt, ...rest }) => rest),
+  };
+  const d = new Date();
+  const name = `点検記録_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`
+    + `-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.json`;
+  const json = JSON.stringify(payload, null, 1);
+
+  // 共有メニューが JSON のファイルを受け付けない環境もあるので、
+  // その場合は中身を変えずに種類だけ text/plain にして試す
+  const candidates = [
+    new File([json], name, { type: "application/json" }),
+    new File([json], name, { type: "text/plain" }),
+  ];
+  const file = candidates.find((f) => navigator.canShare && navigator.canShare({ files: [f] }));
+
+  if (file) {
+    try {
+      await navigator.share({ files: [file], title: name });
+    } catch (e) {
+      if (e.name === "AbortError") return; // 利用者が取りやめた
+      alert(`送れませんでした（${e.message || e}）`);
+      return;
+    }
+  } else {
+    // 共有メニューが使えない環境（PCのブラウザなど）はダウンロードにする
+    const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+    const a = el("a");
+    a.href = url; a.download = name;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  const now = new Date().toISOString();
+  await db.putInspections(targets.map((r) => ({ ...r, sentAt: now })));
+  await renderInspections();
+}
+
+export function bindInspections() {
+  $("#insp-new").onclick = () => openInspection(null);
+  $("#insp-close").onclick = closeInspection;
+  $("#insp-save").onclick = saveInspection;
+  $("#insp-send").onclick = sendToMac;
+}
