@@ -11,7 +11,7 @@ import * as gas from "./gas.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.12.0";
+export const APP_VERSION = "0.12.1";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -44,7 +44,14 @@ async function importFiles(fileList) {
   const text = $("#import-text");
   status.hidden = false;
 
-  let added = 0, skipped = 0, failed = 0;
+  let added = 0, skipped = 0, failed = 0, resent = 0;
+  // Macの日誌にある記録（原本から解析したもの）。これに無い飛行は、原本をMacへ送る
+  const carry = await db.getCarry();
+  const macHas = new Set();
+  for (const a of (carry && carry.data && carry.data.aircraft) || []) {
+    for (const f of a.flights || []) if (f.file && !f.pending_raw) macHas.add(f.file);
+  }
+  const macNeeds = (name) => !!carry && !macHas.has(name);
   const errors = [];
 
   for (let i = 0; i < files.length; i++) {
@@ -53,7 +60,18 @@ async function importFiles(fileList) {
     text.textContent = `${i + 1} / ${files.length} 件目：${file.name}`;
     await new Promise((r) => setTimeout(r, 0)); // 画面を更新させる
 
-    if (await db.hasFlight(file.name)) { skipped++; continue; }
+    if (await db.hasFlight(file.name)) {
+      skipped++;
+      // 前に読み込んだ飛行でも、Macにまだ原本が無ければ送る（Macの日誌の漏れを埋める）
+      if (macNeeds(file.name)) {
+        try {
+          if (await gas.queueFlightLog(file)) resent++;
+        } catch (e) {
+          console.warn("飛行記録を送る準備ができませんでした", e);
+        }
+      }
+      continue;
+    }
     try {
       const flight = await parseLog(file);
       flight.place = await reverseGeocode(flight.lat, flight.lon);
@@ -75,13 +93,14 @@ async function importFiles(fileList) {
   bar.style.width = "100%";
   let msg = `新しい記録 ${added} 件を追加しました`;
   if (skipped) msg += `（取り込み済み ${skipped} 件は飛ばしました）`;
+  if (resent) msg += ` / Macに原本が無い ${resent} 件をMacへ送ります`;
   if (failed) msg += ` / 読めなかったもの ${failed} 件`;
   text.textContent = msg + (errors.length ? `\n${errors.join("\n")}` : "");
 
   await refresh();
   await renderCarry(); // 携行タブの「今日の記録」にもすぐ反映する
   // 読み込んだ飛行記録を、すぐMac版へ送る（電波が無ければ、次に同期したときに送る）
-  if (added) document.dispatchEvent(new Event("flights-imported"));
+  if (added || resent) document.dispatchEvent(new Event("flights-imported"));
   setTimeout(() => { status.hidden = true; bar.style.width = "0"; }, 6000);
   return { added, skipped, failed };
 }
@@ -536,6 +555,22 @@ async function autoSync(force = false) {
   if (status) {
     await renderGas();
     await renderInspections();
+    if (status.restorable) await offerRestore(status.restorable);
+  }
+}
+
+/** このiPhoneが空で、Googleドライブにバックアップがあるときに、戻すかを聞く。 */
+async function offerRestore(n) {
+  if (!confirm(`このiPhoneには記録がありませんが、Googleドライブにバックアップがあります`
+    + `（飛行記録 ${n.flights}件・日常点検 ${n.inspections}件）。このiPhoneに戻しますか？`)) return;
+  try {
+    const r = await gas.restoreFromBackup();
+    await refresh();
+    await renderCarry();
+    await renderInspections();
+    alert(`戻しました（飛行 ${r.flights}件・点検 ${r.inspections}件）。`);
+  } catch (e) {
+    alert(e.message);
   }
 }
 

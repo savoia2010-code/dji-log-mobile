@@ -207,6 +207,12 @@ export async function syncNow({ force = false } = {}) {
       const digest = await digestOf(local);
       if (digest !== (await db.getSettings()).gasBackupDigest) {
         const remote = (await call(conf, "getBackup")).backup;
+        // このiPhoneが空なのにバックアップがある（アイコンを消して追加し直した・別のiPhoneなど）
+        // ときは、戻すかを聞けるように知らせる
+        if (!local.inspections.length && !local.flights.length && remote && remote.format === BACKUP_FORMAT) {
+          const n = { flights: (remote.flights || []).length, inspections: (remote.inspections || []).length };
+          if (n.flights || n.inspections) status.restorable = n;
+        }
         await call(conf, "putBackup", {
           data: { ...mergeBackup(remote, local.inspections, local.flights),
                   carryGeneratedAt: local.carryGeneratedAt },

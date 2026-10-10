@@ -89,6 +89,22 @@ const got = logs.length ? await callMock("getFlightLog", { id: logs[0].id }) : {
 const sameBytes = got.data === Buffer.from(logBytes).toString("base64");
 const outboxLeft = await page.evaluate(async () => (await (await import("./js/db.js")).getOutboxKeys()).length);
 
+// 前に読み込んだ飛行でも、Macの日誌に無ければ、読み込み直したときに原本を送る
+const OLD_NAME = "DJIFlightRecord_2026-08-22_[10-00-00].txt";
+await page.evaluate(async (name) => {
+  const db = await import("./js/db.js");
+  await db.putFlight({ fileName: name, aircraftSn: "SN-TEST-0001", aircraftName: "テスト機",
+    takeoffTime: "2026-08-22T01:00:00.000Z", landingTime: "2026-08-22T01:05:00.000Z",
+    durationSeconds: 300, totalDistanceM: 500, maxAltitudeM: 30, hasGps: true, lat: 0, lon: 0, place: "" });
+}, OLD_NAME);
+await page.setInputFiles("#file-input", { name: OLD_NAME, mimeType: "text/plain", buffer: Buffer.from("old log") });
+await page.waitForFunction(() => /Macへ送ります/.test(document.getElementById("import-text").textContent), null, { timeout: 15000 });
+for (let i = 0; i < 100; i++) {
+  if (((await callMock("listFlightLogs")).items || []).some((x) => x.name === OLD_NAME)) break;
+  await page.waitForTimeout(100);
+}
+const resentOld = ((await callMock("listFlightLogs")).items || []).some((x) => x.name === OLD_NAME);
+
 const inbox = (await callMock("listInbox")).items || [];
 const sentRecords = inbox.flatMap((i) => JSON.parse(i.content).inspections || []);
 const backup = (await callMock("getBackup")).backup;
@@ -142,6 +158,8 @@ const result = {
   設定後: afterSetup, 日誌の受信: carryInfo.includes("Macで作成"),
   送られた点検: sentRecords.length, バックアップの点検: backup ? backup.inspections.length : 0,
   戻したあと: restored.includes("全項目 正常"), 合言葉違い: wrongStatus,
+  読み込み直しで原本を送った: resentOld,
+  空のときに戻すか聞いた: dialogs.some((m) => m.includes("バックアップがあります")),
   変更なしの同期: idleActions,
   飛行記録の送信: { 件数: logs.length, 名前: logs[0] && logs[0].name, 中身が同じ: sameBytes, 残り: outboxLeft },
   受け取った日誌の時刻: backup ? backup.carryGeneratedAt === carry.generatedAt : false,
@@ -151,7 +169,7 @@ const result = {
 console.log(JSON.stringify(result, null, 1));
 await browser.close();
 const ok = result.日誌の受信 && result.送られた点検 === 1 && result.バックアップの点検 === 1
-  && result.戻したあと && !idleActions.includes("putBackup") && idleActions.includes("getCarry")
+  && result.戻したあと && result.空のときに戻すか聞いた && resentOld && !idleActions.includes("putBackup") && idleActions.includes("getCarry")
   && result.受け取った日誌の時刻 && logs.length === 1 && logs[0].name === LOG_NAME && sameBytes && outboxLeft === 0 && /合言葉/.test(wrongStatus) && !problems.length
   && hashGone && copyOffered && /設定しました/.test(qrDialogs[0] || "");
 process.exit(ok ? 0 : 1);
