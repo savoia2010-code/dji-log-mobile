@@ -102,14 +102,28 @@ await page.click("#gas-save");
 await page.waitForFunction(() => /合言葉/.test(document.getElementById("gas-status").textContent), null, { timeout: 15000 });
 const wrongStatus = await page.textContent("#gas-status");
 
+// QRコードで開いた場合（アドレスの #setup= に設定コード）。受け取ったらアドレスから消え、
+// Safariで開いたときの案内から設定できる
+const qr = await context.newPage();
+const qrDialogs = [];
+qr.on("dialog", (d) => { qrDialogs.push(d.message()); d.accept(); });
+await qr.goto(`${URL}#setup=${encodeURIComponent(setupCode)}`, { waitUntil: "networkidle" });
+await qr.waitForSelector(".setup-card", { timeout: 10000 });
+const hashGone = !qr.url().includes("setup=");
+const copyOffered = await qr.isVisible("text=設定コードをコピー");
+await qr.click(".setup-card >> text=ここに設定する");
+for (let i = 0; i < 50 && !qrDialogs.length; i++) await qr.waitForTimeout(100);
+
 const result = {
   設定後: afterSetup, 日誌の受信: carryInfo.includes("Macで作成"),
   送られた点検: sentRecords.length, バックアップの点検: backup ? backup.inspections.length : 0,
   戻したあと: restored.includes("全項目 正常"), 合言葉違い: wrongStatus,
+  QRコード: { アドレスから消えた: hashGone, コピーの案内: copyOffered, 結果: qrDialogs[0] || "" },
   呼び出し回数: calls, dialogs, problems,
 };
 console.log(JSON.stringify(result, null, 1));
 await browser.close();
 const ok = result.日誌の受信 && result.送られた点検 === 1 && result.バックアップの点検 === 1
-  && result.戻したあと && /合言葉/.test(wrongStatus) && !problems.length;
+  && result.戻したあと && /合言葉/.test(wrongStatus) && !problems.length
+  && hashGone && copyOffered && /設定しました/.test(qrDialogs[0] || "");
 process.exit(ok ? 0 : 1);

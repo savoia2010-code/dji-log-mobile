@@ -41,6 +41,22 @@ export function parseSetupCode(code) {
   return { url: String(conf.url), token: String(conf.token) };
 }
 
+/**
+ * QRコードで開いたときの設定コードを受け取る（アドレスの #setup= の後ろ）。
+ * 受け取ったら、アドレスからすぐ消す（履歴や画面に合言葉を残さないため）。
+ * # より後ろはブラウザが公開先へ送らないので、GitHub には届かない。
+ */
+export function takeSetupFromUrl() {
+  const hash = location.hash || "";
+  if (!hash.startsWith("#setup=")) return null;
+  history.replaceState(null, "", location.pathname + location.search);
+  try {
+    return decodeURIComponent(hash.slice("#setup=".length));
+  } catch {
+    return null;
+  }
+}
+
 export async function getConfig() {
   const s = await db.getSettings();
   return s.gasUrl && s.gasToken ? { url: s.gasUrl, token: s.gasToken } : null;

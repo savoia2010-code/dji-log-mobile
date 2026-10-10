@@ -186,6 +186,9 @@ main {
 .today-row .muted { color: var(--muted); }
 .today-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* QRコードで受け取った設定 */
+.setup-card { border-color: var(--accent); }
+
 /* 具備資料 */
 .doc-title { font-size: 14px; margin: 14px 0 4px; border-top: 1px solid var(--border); padding-top: 10px; }
 .doc-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; margin: 8px 0; }

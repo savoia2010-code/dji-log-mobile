@@ -6,7 +6,7 @@ import { parseLog } from "./parser.js";
 import { reverseGeocode, formatPlace } from "./geocode.js";
 import { buildLogbook, fileNameFor, fmtDate, fmtTime, fmtDuration } from "./export.js";
 import { bindInspections, renderInspections } from "./inspections.js";
-import { bindCarry, protectStorage, renderCarry } from "./carry.js";
+import { bindCarry, isInstalled, protectStorage, renderCarry } from "./carry.js";
 import * as gas from "./gas.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
@@ -572,6 +572,54 @@ function bindGas() {
   document.addEventListener("inspection-saved", () => autoSync(true));
 }
 
+/**
+ * QRコードで受け取った設定コードの案内。
+ * ホーム画面のアプリで開いたときはそのまま設定できる。Safariで開いたとき
+ * （カメラで読むと Safari で開く）は、Safari とホーム画面のアプリは保存先が別なので、
+ * コピーしてホーム画面のアプリに貼ってもらう。
+ */
+function showIncomingSetup(code) {
+  try {
+    gas.parseSetupCode(code);
+  } catch (e) {
+    alert(`QRコードの設定コードを読み取れませんでした。\n${e.message}`);
+    return;
+  }
+  const card = el("div", "card setup-card");
+  card.append(el("h2", null, "設定コードを受け取りました"));
+  const apply = el("button", "btn primary block", "このアプリにGoogleドライブ同期を設定する");
+  apply.onclick = async () => {
+    await gas.saveConfig(code);
+    card.remove();
+    await autoSync(true);
+    const st = (await db.getSettings()).gasStatus;
+    alert(st && st.ok ? `設定しました。${st.message}` : `設定しましたが、同期できませんでした。\n${st ? st.message : ""}`);
+  };
+  if (isInstalled()) {
+    card.append(apply);
+  } else {
+    card.append(el("p", "help",
+      "いまはSafariで開いています。ホーム画面のアプリとは保存先が別なので、"
+      + "下の「コピー」を押してから、ホーム画面の iPhone版を開き、「設定」→「Googleドライブ同期」に貼り付けてください。"));
+    const copy = el("button", "btn primary block", "設定コードをコピー");
+    copy.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(code);
+        copy.textContent = "コピーしました。ホーム画面のアプリで貼り付けてください";
+      } catch {
+        alert("コピーできませんでした。もう一度押してください。");
+      }
+    };
+    card.append(copy);
+    apply.className = "btn block";
+    apply.textContent = "（Safariのままで使う場合）ここに設定する";
+    apply.style.marginTop = "8px";
+    card.append(apply);
+  }
+  document.querySelector("main").prepend(card);
+  window.scrollTo(0, 0);
+}
+
 function showFatal(message, detail) {
   const box = el("div", "card");
   box.append(el("h2", null, message));
@@ -601,6 +649,8 @@ async function start() {
   try {
     await renderCarry();
     await protectStorage();
+    const incoming = gas.takeSetupFromUrl();
+    if (incoming) showIncomingSetup(incoming);
     autoSync();
   } catch (e) {
     showFatal("携行用の日誌を表示できませんでした", String(e && e.message || e));

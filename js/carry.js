@@ -569,7 +569,7 @@ function permitsSection(documents) {
 // ---------- 記録を消されないための対策 ----------
 
 // ホーム画面に追加したアプリとして開いているか
-const isInstalled = () =>
+export const isInstalled = () =>
   window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 
 /**
