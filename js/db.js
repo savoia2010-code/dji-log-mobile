@@ -3,7 +3,8 @@
 const DB_NAME = "dji-log-mobile";
 // 2: 日常点検記録（inspections）を追加
 // 3: Mac版から受け取った携行用の飛行日誌（carry）を追加
-const DB_VERSION = 3;
+// 4: Mac版へ送る飛行記録の原本（outbox。送ったら消す）を追加
+const DB_VERSION = 4;
 
 let dbPromise = null;
 
@@ -44,6 +45,9 @@ function open() {
       if (!db.objectStoreNames.contains("carry")) {
         db.createObjectStore("carry", { keyPath: "key" });
       }
+      if (!db.objectStoreNames.contains("outbox")) {
+        db.createObjectStore("outbox", { keyPath: "fileName" });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(new StorageUnavailable(String(req.error)));
@@ -61,6 +65,12 @@ async function tx(store, mode, fn) {
     t.onabort = () => reject(t.error);
   });
 }
+
+// Mac版へ送る飛行記録の原本 { fileName, bytes(ArrayBuffer), addedAt }
+export const putOutbox = (item) => tx("outbox", "readwrite", (s) => s.put(item));
+export const getOutboxKeys = () => tx("outbox", "readonly", (s) => s.getAllKeys());
+export const getOutbox = (fileName) => tx("outbox", "readonly", (s) => s.get(fileName));
+export const deleteOutbox = (fileName) => tx("outbox", "readwrite", (s) => s.delete(fileName));
 
 export const getAllFlights = () => tx("flights", "readonly", (s) => s.getAll());
 export const getFlight = (fileName) => tx("flights", "readonly", (s) => s.get(fileName));

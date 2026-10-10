@@ -74,6 +74,21 @@ const beforeIdle = actions.length;
 await page.click("#gas-sync");
 await page.waitForFunction(() => /変更はありません/.test(document.getElementById("gas-status").textContent), null, { timeout: 15000 });
 const idleActions = actions.slice(beforeIdle);
+// 飛行記録を読み込むと、原本がMac版へ送られる（読み込みの解析は別の検証で確かめる。
+// ここでは、読み込んだときに呼ぶ「送る順番待ちに入れる」から先を確かめる）
+const LOG_NAME = "DJIFlightRecord_2026-07-14_[10-00-00].txt";
+const logBytes = Array.from({ length: 300000 }, (_, i) => (i * 7) % 256);   // 文字にならない値も含む
+await page.evaluate(async ({ name, bytes }) => {
+  const gas = await import("./js/gas.js");
+  await gas.queueFlightLog(new File([new Uint8Array(bytes)], name));
+}, { name: LOG_NAME, bytes: logBytes });
+await page.click("#gas-sync");
+await page.waitForFunction(() => /飛行記録 1件を送信/.test(document.getElementById("gas-status").textContent), null, { timeout: 15000 });
+const logs = (await callMock("listFlightLogs")).items || [];
+const got = logs.length ? await callMock("getFlightLog", { id: logs[0].id }) : {};
+const sameBytes = got.data === Buffer.from(logBytes).toString("base64");
+const outboxLeft = await page.evaluate(async () => (await (await import("./js/db.js")).getOutboxKeys()).length);
+
 const inbox = (await callMock("listInbox")).items || [];
 const sentRecords = inbox.flatMap((i) => JSON.parse(i.content).inspections || []);
 const backup = (await callMock("getBackup")).backup;
@@ -128,6 +143,7 @@ const result = {
   送られた点検: sentRecords.length, バックアップの点検: backup ? backup.inspections.length : 0,
   戻したあと: restored.includes("全項目 正常"), 合言葉違い: wrongStatus,
   変更なしの同期: idleActions,
+  飛行記録の送信: { 件数: logs.length, 名前: logs[0] && logs[0].name, 中身が同じ: sameBytes, 残り: outboxLeft },
   受け取った日誌の時刻: backup ? backup.carryGeneratedAt === carry.generatedAt : false,
   QRコード: { アドレスから消えた: hashGone, コピーの案内: copyOffered, 結果: qrDialogs[0] || "" },
   呼び出し回数: calls, dialogs, problems,
@@ -136,6 +152,6 @@ console.log(JSON.stringify(result, null, 1));
 await browser.close();
 const ok = result.日誌の受信 && result.送られた点検 === 1 && result.バックアップの点検 === 1
   && result.戻したあと && !idleActions.includes("putBackup") && idleActions.includes("getCarry")
-  && result.受け取った日誌の時刻 && /合言葉/.test(wrongStatus) && !problems.length
+  && result.受け取った日誌の時刻 && logs.length === 1 && logs[0].name === LOG_NAME && sameBytes && outboxLeft === 0 && /合言葉/.test(wrongStatus) && !problems.length
   && hashGone && copyOffered && /設定しました/.test(qrDialogs[0] || "");
 process.exit(ok ? 0 : 1);

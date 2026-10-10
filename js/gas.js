@@ -102,6 +102,52 @@ async function call(conf, action, payload = {}) {
 }
 
 const isUnsent = (r) => !r.sentAt || r.updatedAt > r.sentAt;
+const UNSUPPORTED = "対応していない操作です";
+
+/** ArrayBuffer を base64 に（大きなファイルでも落ちないよう、少しずつ変換する）。 */
+function toBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+}
+
+/**
+ * 読み込んだ飛行記録の原本を、Mac版へ送る順番待ちに入れる（同期を設定しているときだけ）。
+ * 電波の無い場所で読み込んでも、次に同期したときに送られる。
+ */
+export async function queueFlightLog(file) {
+  if (!(await getConfig())) return false;
+  await db.putOutbox({ fileName: file.name, bytes: await file.arrayBuffer(), addedAt: new Date().toISOString() });
+  return true;
+}
+
+/** 順番待ちの飛行記録を送る。送れた数と、残った数を返す。 */
+async function sendFlightLogs(conf) {
+  let sent = 0;
+  const keys = await db.getOutboxKeys();
+  for (const name of keys) {
+    const item = await db.getOutbox(name);
+    if (!item) continue;
+    try {
+      await call(conf, "putFlightLog", { name, data: toBase64(item.bytes) });
+    } catch (e) {
+      if (e instanceof GasError && e.message.includes("ファイル名")) {
+        await db.deleteOutbox(name);   // 送れない名前のものは、何度送っても同じなので外す
+        continue;
+      }
+      if (e instanceof GasError && e.message.includes(UNSUPPORTED)) {
+        return { sent, waiting: keys.length - sent, outdated: true };
+      }
+      throw e;
+    }
+    await db.deleteOutbox(name);
+    sent++;
+  }
+  return { sent, waiting: 0, outdated: false };
+}
 
 /**
  * 同期する。結果は設定の gasStatus にも残す（画面に出すため）。
@@ -114,7 +160,8 @@ export async function syncNow({ force = false } = {}) {
   if (!force && Date.now() - lastRun < MIN_INTERVAL_MS) return null;
   lastRun = Date.now();
   running = (async () => {
-    const status = { time: new Date().toISOString(), ok: true, sent: 0, received: false, message: "" };
+    const status = { time: new Date().toISOString(), ok: true, sent: 0, flights: 0, received: false, message: "" };
+    let outdated = false;
     try {
       // 1. 未送信の点検を送る
       const inspections = await db.getAllInspections();
@@ -130,6 +177,11 @@ export async function syncNow({ force = false } = {}) {
         await db.putInspections(unsent.map((r) => ({ ...r, sentAt: now })));
         status.sent = unsent.length;
       }
+
+      // 1b. 読み込んだ飛行記録の原本を送る（Mac版が解析して日誌に入れる）
+      const logs = await sendFlightLogs(conf);
+      status.flights = logs.sent;
+      outdated = logs.outdated;
 
       // 2. Mac版の携行用の日誌が新しくなっていれば受け取る
       const saved = await db.getCarry();
@@ -164,8 +216,13 @@ export async function syncNow({ force = false } = {}) {
 
       const parts = [];
       if (status.sent) parts.push(`点検 ${status.sent}件を送信`);
+      if (status.flights) parts.push(`飛行記録 ${status.flights}件を送信`);
       if (status.received) parts.push("Macの日誌を受信");
       status.message = parts.join("、") || "変更はありませんでした";
+      if (outdated) {
+        status.message += "。Googleドライブのスクリプトが古いため、飛行記録はまだ送れません"
+          + "（Mac版の「設定」→「Googleドライブ同期」の案内で更新してください。送れなかった記録は残してあります）";
+      }
     } catch (e) {
       status.ok = false;
       status.message = e instanceof GasError ? e.message : `同期できませんでした（${e.message || e}）`;

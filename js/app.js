@@ -11,7 +11,7 @@ import * as gas from "./gas.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.10.0";
+export const APP_VERSION = "0.11.0";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -59,6 +59,12 @@ async function importFiles(fileList) {
       flight.place = await reverseGeocode(flight.lat, flight.lon);
       await db.ensureAircraft(flight.aircraftSn, flight.aircraftName);
       await db.putFlight(flight);
+      // Googleドライブ同期を設定していれば、原本をMac版へ送る順番待ちに入れる
+      try {
+        await gas.queueFlightLog(file);
+      } catch (e) {
+        console.warn("飛行記録を送る準備ができませんでした", e);   // 読み込み自体は済んでいる
+      }
       added++;
     } catch (e) {
       failed++;
@@ -74,6 +80,8 @@ async function importFiles(fileList) {
 
   await refresh();
   await renderCarry(); // 携行タブの「今日の記録」にもすぐ反映する
+  // 読み込んだ飛行記録を、すぐMac版へ送る（電波が無ければ、次に同期したときに送る）
+  if (added) document.dispatchEvent(new Event("flights-imported"));
   setTimeout(() => { status.hidden = true; bar.style.width = "0"; }, 6000);
   return { added, skipped, failed };
 }
@@ -570,6 +578,7 @@ function bindGas() {
   });
   // 点検を保存したら、すぐ送る（送り忘れを無くすため）
   document.addEventListener("inspection-saved", () => autoSync(true));
+  document.addEventListener("flights-imported", () => autoSync(true));
 }
 
 /**
