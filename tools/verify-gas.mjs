@@ -34,8 +34,10 @@ const browser = await webkit.launch();
 const context = await browser.newContext({ ...devices["iPhone 15"], serviceWorkers: "block" });
 const problems = [];
 let calls = 0;
+const actions = [];
 await context.route("https://script.google.com/**", async (route) => {
   calls++;
+  actions.push(JSON.parse(route.request().postData() || "{}").action);
   const r = await fetch(`${mock}/exec`, { method: "POST", body: route.request().postData() });
   await route.fulfill({ status: 200, contentType: "application/json",
     headers: { "access-control-allow-origin": "*" }, body: await r.text() });
@@ -66,6 +68,12 @@ await page.selectOption("#in-aircraft", "SN-TEST-0001");
 await page.click("text=すべて「正常」");
 await page.click("#insp-save");
 await page.waitForFunction(() => /送信済み/.test(document.getElementById("insp-list").textContent), null, { timeout: 15000 });
+// 何も変わっていなければ、同期してもバックアップを送り直さない（通信を減らす）
+await page.click('.tab-btn[data-view="settings"]');
+const beforeIdle = actions.length;
+await page.click("#gas-sync");
+await page.waitForFunction(() => /変更はありません/.test(document.getElementById("gas-status").textContent), null, { timeout: 15000 });
+const idleActions = actions.slice(beforeIdle);
 const inbox = (await callMock("listInbox")).items || [];
 const sentRecords = inbox.flatMap((i) => JSON.parse(i.content).inspections || []);
 const backup = (await callMock("getBackup")).backup;
@@ -119,12 +127,15 @@ const result = {
   設定後: afterSetup, 日誌の受信: carryInfo.includes("Macで作成"),
   送られた点検: sentRecords.length, バックアップの点検: backup ? backup.inspections.length : 0,
   戻したあと: restored.includes("全項目 正常"), 合言葉違い: wrongStatus,
+  変更なしの同期: idleActions,
+  受け取った日誌の時刻: backup ? backup.carryGeneratedAt === carry.generatedAt : false,
   QRコード: { アドレスから消えた: hashGone, コピーの案内: copyOffered, 結果: qrDialogs[0] || "" },
   呼び出し回数: calls, dialogs, problems,
 };
 console.log(JSON.stringify(result, null, 1));
 await browser.close();
 const ok = result.日誌の受信 && result.送られた点検 === 1 && result.バックアップの点検 === 1
-  && result.戻したあと && /合言葉/.test(wrongStatus) && !problems.length
+  && result.戻したあと && !idleActions.includes("putBackup") && idleActions.includes("getCarry")
+  && result.受け取った日誌の時刻 && /合言葉/.test(wrongStatus) && !problems.length
   && hashGone && copyOffered && /設定しました/.test(qrDialogs[0] || "");
 process.exit(ok ? 0 : 1);

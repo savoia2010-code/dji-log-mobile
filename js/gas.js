@@ -68,6 +68,7 @@ export async function saveConfig(code) {
   const conf = parseSetupCode(code);
   await db.setSetting("gasUrl", conf.url);
   await db.setSetting("gasToken", conf.token);
+  await db.setSetting("gasBackupDigest", "");   // 送り先が変わったかもしれないので、次は必ず送る
   return conf;
 }
 
@@ -75,6 +76,7 @@ export async function clearConfig() {
   await db.setSetting("gasUrl", "");
   await db.setSetting("gasToken", "");
   await db.setSetting("gasStatus", null);
+  await db.setSetting("gasBackupDigest", "");
 }
 
 async function call(conf, action, payload = {}) {
@@ -129,22 +131,37 @@ export async function syncNow({ force = false } = {}) {
         status.sent = unsent.length;
       }
 
-      // 2. このiPhoneの中身をバックアップする（消えたときに戻せるように）。
-      //    置き換えずに、Googleドライブにあるバックアップと合わせる。置き換えると、
-      //    中身が消えたiPhoneで設定し直したときに、空の中身でバックアップを
-      //    上書きしてしまう（戻したいバックアップが消える）。
-      const remote = (await call(conf, "getBackup")).backup;
-      await call(conf, "putBackup", {
-        data: mergeBackup(remote, await db.getAllInspections(), await db.getAllFlights()),
-      });
-
-      // 3. Mac版の携行用の日誌が新しくなっていれば受け取る
+      // 2. Mac版の携行用の日誌が新しくなっていれば受け取る
       const saved = await db.getCarry();
       const got = await call(conf, "getCarry", { since: saved ? saved.data.generatedAt : "" });
       if (got.carry) {
         const { acceptCarry } = await import("./carry.js");
         status.received = await acceptCarry(got.carry);
       }
+
+      // 3. このiPhoneの中身をバックアップする（消えたときに戻せるように）。
+      //    置き換えずに、Googleドライブにあるバックアップと合わせる。置き換えると、
+      //    中身が消えたiPhoneで設定し直したときに、空の中身でバックアップを
+      //    上書きしてしまう（戻したいバックアップが消える）。
+      //    前回から何も変わっていなければ送らない（飛行記録が増えると100KBを超えるので、
+      //    画面を開くたびに送ると、出先の通信が遅いときに同期が長引く）。
+      //    受け取った日誌の作成時刻も入れて、Mac版が「iPhoneに届いたか」を確かめられるようにする。
+      const carryNow = await db.getCarry();
+      const local = {
+        inspections: await db.getAllInspections(),
+        flights: await db.getAllFlights(),
+        carryGeneratedAt: carryNow ? String(carryNow.data.generatedAt || "") : "",
+      };
+      const digest = await digestOf(local);
+      if (digest !== (await db.getSettings()).gasBackupDigest) {
+        const remote = (await call(conf, "getBackup")).backup;
+        await call(conf, "putBackup", {
+          data: { ...mergeBackup(remote, local.inspections, local.flights),
+                  carryGeneratedAt: local.carryGeneratedAt },
+        });
+        await db.setSetting("gasBackupDigest", digest);
+      }
+
       const parts = [];
       if (status.sent) parts.push(`点検 ${status.sent}件を送信`);
       if (status.received) parts.push("Macの日誌を受信");
@@ -183,6 +200,12 @@ export function mergeBackup(remote, inspections, flights) {
     format: BACKUP_FORMAT, version: 1, savedAt: new Date().toISOString(),
     inspections: [...insp.values()], flights: [...fl.values()],
   };
+}
+
+async function digestOf(value) {
+  const bytes = new TextEncoder().encode(JSON.stringify(value));
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /**
