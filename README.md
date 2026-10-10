@@ -94,7 +94,10 @@ node tools/verify-webkit.mjs "path/to/DJIFlightRecord_....txt"
 iPhone 15の画面サイズで、WASM解析・IndexedDB保存・Excel生成・レイアウト崩れ
 （横スクロール、ラベルのはみ出し）を確認し、`webkit-shot.png` を残す。
 
-日常点検の入力から「Macへ送る」までは次で確認する（書き出したファイルを保存する）。
+点検の記録・携行用ファイルの受け取り・その日の飛行の扱いは、`npm test` でまとめて確かめられる
+（一時的にサーバーを立て、`tests/fixtures/` の架空のデータだけを使う）。
+
+個別に動かす場合は次のとおり。
 
 ```bash
 node tools/verify-inspections.mjs /path/to/out.json

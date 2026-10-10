@@ -3,6 +3,9 @@
 //
 //   node tools/verify-today.mjs <携行用.json> <その日の飛行記録.txt> <その日時 ISO> [期待する総飛行時間 H:MM]
 //
+// 飛行記録の代わりに、解析済みの飛行を表す .json（tests/fixtures/flight-sample.json）を
+// 渡すと、解析を通さずに端末内へ直接入れる（実データを使わずに確かめるため）。
+//
 // 実際に「今日」飛ばした記録は用意できないので、ブラウザの時計をその飛行の日に合わせる。
 
 import { webkit, devices } from "playwright";
@@ -35,13 +38,28 @@ await page.setInputFiles("#carry-input", {
 await page.waitForFunction(() => /Macで作成/.test(document.getElementById("carry-info").textContent));
 const afterCarry = await todayText();
 
-// 飛行が終わったので DJI Fly の記録を読み込む（「記録」タブの経路）
-await page.setInputFiles("#file-input", {
-  name: basename(logPath), mimeType: "text/plain", buffer: readFileSync(logPath),
-});
-await page.waitForFunction(
-  () => /追加しました|読めなかった/.test(document.getElementById("import-text")?.textContent || ""),
-  null, { timeout: 120000 });
+if (logPath.endsWith(".json")) {
+  // 解析済みの飛行を、取り込みと同じ保存先に直接入れる
+  const flight = JSON.parse(readFileSync(logPath, "utf-8"));
+  await page.evaluate((f) => new Promise((resolve, reject) => {
+    const req = indexedDB.open("dji-log-mobile");
+    req.onsuccess = () => {
+      const t = req.result.transaction("flights", "readwrite");
+      t.objectStore("flights").put(f);
+      t.oncomplete = () => { req.result.close(); resolve(); };
+      t.onerror = () => reject(t.error);
+    };
+  }), flight);
+} else {
+  // 飛行が終わったので DJI Fly の記録を読み込む（「記録」タブの経路）
+  await page.setInputFiles("#file-input", {
+    name: basename(logPath), mimeType: "text/plain", buffer: readFileSync(logPath),
+  });
+  await page.waitForFunction(
+    () => /追加しました|読めなかった/.test(document.getElementById("import-text")?.textContent || ""),
+    null, { timeout: 120000 });
+}
+await page.click('.tab-btn[data-view="inspections"]');
 await page.click('.tab-btn[data-view="carry"]');
 const afterFlight = await todayText();
 

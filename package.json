@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "serve": "python3 -m http.server 8310 --directory .",
-    "verify": "node tools/verify-webkit.mjs"
+    "verify": "node tools/verify-webkit.mjs",
+    "test": "node tools/run-tests.mjs"
   },
   "devDependencies": {
     "playwright": "^1.62.0"

@@ -1,0 +1,17 @@
+{
+ "fileName": "DJIFlightRecord_2026-07-14_[15-00-00].txt",
+ "aircraftSn": "SN-TEST-0001",
+ "aircraftName": "テスト機",
+ "takeoffTime": "2026-07-14T15:00:00+09:00",
+ "landingTime": "2026-07-14T15:06:40+09:00",
+ "durationSeconds": 400,
+ "totalDistanceM": 120,
+ "maxAltitudeM": 30,
+ "hasGps": true,
+ "lat": 35.6812,
+ "lon": 139.7671,
+ "place": "東京都千代田区丸の内一丁目付近",
+ "purpose": ["空撮"],
+ "specifiedFlight": [],
+ "manualOverride": null
+}

@@ -1,0 +1,29 @@
+{
+ "format": "dji-log-carry",
+ "version": 1,
+ "generatedAt": "2026-07-14T09:00:00+09:00",
+ "aircraft": [
+  {
+   "serial": "SN-TEST-0001",
+   "label": "テスト機（JU0000000000）",
+   "name": "テスト機",
+   "registration": "JU0000000000",
+   "model": "DJI Neo",
+   "flights": [
+    {"file": "DJIFlightRecord_2026-07-13_[10-00-00].txt", "date": "2026-07-13", "pilot": "見本 太郎",
+     "purpose": "空撮", "specified_flight": "", "route": "", "takeoff_place": "東京都千代田区千代田1番付近",
+     "landing_place": "東京都千代田区千代田1番付近", "takeoff_time": "10:00", "landing_time": "11:00",
+     "duration": "1:00", "total_time": "1:00", "issues": "", "issue_response": "", "remarks": ""},
+    {"file": "DJIFlightRecord_2026-07-14_[10-00-00].txt", "date": "2026-07-14", "pilot": "見本 太郎",
+     "purpose": "空撮", "specified_flight": "", "route": "", "takeoff_place": "東京都千代田区千代田1番付近",
+     "landing_place": "東京都千代田区千代田1番付近", "takeoff_time": "10:00", "landing_time": "10:10",
+     "duration": "0:10", "total_time": "1:10", "issues": "", "issue_response": "", "remarks": ""}
+   ],
+   "daily": [],
+   "maintenance": [
+    {"date": "2026-07-01", "total_time": "0:00", "detail": "プロペラ交換（見本）", "reason": "定期交換",
+     "place": "", "engineer": "見本 太郎", "remarks": ""}
+   ]
+  }
+ ]
+}
