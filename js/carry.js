@@ -88,7 +88,26 @@ export async function acceptCarry(data) {
   await db.mergeAircraftFromMac(list(data.aircraft).map((a) => ({
     serial: str(a.serial), name: str(a.name), registration: str(a.registration), model: str(a.model),
   })));
+  if (await applyCriteria(obj(data.criteria))) document.dispatchEvent(new Event("criteria-changed"));
   await renderCarry();
+  return true;
+}
+
+/**
+ * Mac版の「飛行とみなす距離・高度」が、このiPhoneで変えたときより新しければ合わせる。
+ * 合わせたら true。
+ */
+async function applyCriteria(c) {
+  const theirs = Date.parse(str(c.updatedAt));
+  if (Number.isNaN(theirs)) return false;
+  const s = await db.getSettings();
+  const mine = Date.parse(str(s.criteriaUpdatedAt));
+  if (!Number.isNaN(mine) && mine >= theirs) return false;
+  const dist = Number(c.distanceThresholdM);
+  const alt = Number(c.altitudeThresholdM);
+  if (Number.isFinite(dist) && dist >= 0) await db.setSetting("distanceThresholdM", dist);
+  if (Number.isFinite(alt) && alt >= 0) await db.setSetting("altitudeThresholdM", alt);
+  await db.setSetting("criteriaUpdatedAt", str(c.updatedAt));
   return true;
 }
 

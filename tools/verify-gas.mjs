@@ -109,15 +109,24 @@ const inbox = (await callMock("listInbox")).items || [];
 const sentRecords = inbox.flatMap((i) => JSON.parse(i.content).inspections || []);
 const backup = (await callMock("getBackup")).backup;
 
-// 設定（飛行とみなす距離）と機体の情報（Macに無い、使い始める前の飛行時間）もバックアップに残る
+// Macで変えた「飛行とみなす距離」が、携行用の日誌と一緒に届いて合わさる
+const carry2 = { ...carry, generatedAt: new Date(Date.now() + 1000).toISOString(),
+  criteria: { distanceThresholdM: 6, altitudeThresholdM: 0, updatedAt: new Date().toISOString() } };
+await callMock("putCarry", { data: carry2 });
+await page.click('.tab-btn[data-view="settings"]');
+await page.click("#gas-sync");
+await page.waitForFunction(() => document.getElementById("dist-threshold").value === "6", null, { timeout: 15000 }).catch(() => {});
+const fromMac = await page.inputValue("#dist-threshold");
+
+// このiPhoneで変えると、変えた時刻と一緒にバックアップに入る（Mac版がそれを見て合わせる）。
+// 機体の情報（Macに無い、使い始める前の飛行時間）もバックアップに残る
 await page.evaluate(async () => {
   const db = await import("./js/db.js");
-  await db.setSetting("distanceThresholdM", 5);
   const a = (await db.getAllAircraft()).find((x) => x.serial === "SN-TEST-0001");
   await db.putAircraft({ ...a, initialFlightSeconds: 3600 });
 });
-await page.click('.tab-btn[data-view="settings"]');
-await page.click("#gas-sync");
+await page.fill("#dist-threshold", "5");
+await page.click("#save-settings");
 for (let i = 0; i < 100; i++) {
   const b = (await callMock("getBackup")).backup;
   if (b && b.settings && b.settings.distanceThresholdM === 5) break;
@@ -181,7 +190,7 @@ const result = {
   送られた点検: sentRecords.length, バックアップの点検: backup ? backup.inspections.length : 0,
   戻したあと: restored.includes("全項目 正常"), 合言葉違い: wrongStatus,
   読み込み直しで原本を送った: resentOld,
-  バックアップの設定: backedUpSettings, 戻した設定: restoredSettings,
+  Macの判定が届いた: fromMac, バックアップの設定: backedUpSettings, 戻した設定: restoredSettings,
   空のときに戻すか聞いた: dialogs.some((m) => m.includes("バックアップがあります")),
   変更なしの同期: idleActions,
   飛行記録の送信: { 件数: logs.length, 名前: logs[0] && logs[0].name, 中身が同じ: sameBytes, 残り: outboxLeft },
@@ -192,7 +201,8 @@ const result = {
 console.log(JSON.stringify(result, null, 1));
 await browser.close();
 const ok = result.日誌の受信 && result.送られた点検 === 1 && result.バックアップの点検 === 1
-  && result.戻したあと && result.空のときに戻すか聞いた && restoredSettings.距離 === 5
+  && result.戻したあと && result.空のときに戻すか聞いた && restoredSettings.距離 === 5 && fromMac === "6"
+  && !!backedUpSettings.criteriaUpdatedAt
   && restoredSettings.使い始める前の飛行時間 === 3600 && restoredSettings.画面の距離 === "5" && resentOld && !idleActions.includes("putBackup") && idleActions.includes("getCarry")
   && result.受け取った日誌の時刻 && logs.length === 1 && logs[0].name === LOG_NAME && sameBytes && outboxLeft === 0 && /合言葉/.test(wrongStatus) && !problems.length
   && hashGone && copyOffered && /設定しました/.test(qrDialogs[0] || "");

@@ -11,7 +11,7 @@ import * as gas from "./gas.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.12.2";
+export const APP_VERSION = "0.13.0";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -495,12 +495,24 @@ function bind() {
   $("#export-btn").onclick = exportXlsx;
 
   $("#save-settings").onclick = async () => {
+    const before = await db.getSettings();
+    const dist = Number($("#dist-threshold").value) || 8;
+    const alt = Number($("#alt-threshold").value) || 0;
     await db.setSetting("pilotName", $("#pilot-name").value.trim());
-    await db.setSetting("distanceThresholdM", Number($("#dist-threshold").value) || 8);
-    await db.setSetting("altitudeThresholdM", Number($("#alt-threshold").value) || 0);
+    await db.setSetting("distanceThresholdM", dist);
+    await db.setSetting("altitudeThresholdM", alt);
+    // 飛行とみなす距離・高度は Mac版と揃える。変えた時刻を残し、新しい方に合わせる
+    const changed = dist !== Number(before.distanceThresholdM) || alt !== Number(before.altitudeThresholdM);
+    if (changed) await db.setSetting("criteriaUpdatedAt", new Date().toISOString());
     await refresh();
-    alert("保存しました。");
+    alert(changed ? "保存しました。Mac版にも同じ判定が届きます（同期したとき）。" : "保存しました。");
+    if (changed) autoSync(true);
   };
+  // Mac版で変えた判定を受け取ったら、一覧と設定の画面を描き直す
+  document.addEventListener("criteria-changed", async () => {
+    await refresh();
+    renderSettings();
+  });
 
   $("#regeocode").onclick = async () => {
     const btn = $("#regeocode");

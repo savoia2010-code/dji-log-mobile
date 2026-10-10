@@ -18,8 +18,21 @@ const SCRIPT_URL = /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/e
 const MIN_INTERVAL_MS = 60 * 1000;   // 画面の切り替えのたびに呼ばないよう間隔を空ける
 const BACKUP_FORMAT = "dji-log-mobile-backup";
 // バックアップに入れる設定（利用者が決めるもの）。同期の合言葉などは入れない
-const BACKUP_SETTING_KEYS = ["pilotName", "distanceThresholdM", "altitudeThresholdM"];
+const BACKUP_SETTING_KEYS = ["pilotName", "distanceThresholdM", "altitudeThresholdM", "criteriaUpdatedAt"];
 const AIRCRAFT_FIELDS = ["name", "registration", "model", "initialFlightSeconds"];
+// 飛行とみなす距離・高度は、変えた時刻（criteriaUpdatedAt）が新しい方を採る
+const CRITERIA_KEYS = ["distanceThresholdM", "altitudeThresholdM", "criteriaUpdatedAt"];
+const timeOf = (v) => { const t = Date.parse(String(v || "")); return Number.isNaN(t) ? -Infinity : t; };
+
+/** バックアップの設定と手元の設定を合わせる。判定の設定は新しく変えた方を採る。 */
+function mergeSettings(remote, local) {
+  const r = remote && typeof remote === "object" ? remote : {};
+  const out = { ...r, ...local };
+  if (timeOf(r.criteriaUpdatedAt) > timeOf(local.criteriaUpdatedAt)) {
+    for (const k of CRITERIA_KEYS) if (k in r) out[k] = r[k];
+  }
+  return out;
+}
 
 async function backupSettings() {
   const stored = await db.getStoredSettings();
@@ -286,7 +299,7 @@ export function mergeBackup(remote, inspections, flights, { settings = {}, aircr
   return {
     format: BACKUP_FORMAT, version: 1, savedAt: new Date().toISOString(),
     inspections: [...insp.values()], flights: [...fl.values()],
-    settings: { ...(old.settings && typeof old.settings === "object" ? old.settings : {}), ...settings },
+    settings: mergeSettings(old.settings, settings),
     aircraft: [...ac.values()],
   };
 }
@@ -320,9 +333,14 @@ export async function restoreFromBackup() {
   // 設定は、このiPhoneでまだ決めていないものだけを戻す（手元で決め直したものは残す）
   const stored = await db.getStoredSettings();
   const settings = backup.settings && typeof backup.settings === "object" ? backup.settings : {};
+  // 飛行とみなす距離・高度は、変えた時刻が新しい方を採る（Mac版から先に届いた値より、
+  // このiPhoneで後から変えた値を優先する）
   let restoredSettings = 0;
+  const criteriaNewer = timeOf(settings.criteriaUpdatedAt) > timeOf(stored.criteriaUpdatedAt);
   for (const k of BACKUP_SETTING_KEYS) {
-    if (k in settings && !(k in stored)) {
+    if (!(k in settings)) continue;
+    const take = CRITERIA_KEYS.includes(k) && "criteriaUpdatedAt" in settings ? criteriaNewer : !(k in stored);
+    if (take) {
       await db.setSetting(k, settings[k]);
       restoredSettings++;
     }
