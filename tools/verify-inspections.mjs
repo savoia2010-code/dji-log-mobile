@@ -52,7 +52,6 @@ const place = await page.inputValue("#in-place");
 await page.click("text=すべて「正常」");
 await page.check('input[name="res-1"][value="異常"]');
 await page.fill("#rem-1", "先端に小さな欠け");
-await page.click(`text=を追記`);
 if (shot("insp-form.png")) await page.screenshot({ path: shot("insp-form.png") });
 await page.click("#insp-save");
 await page.waitForFunction(() => /未送信/.test(document.getElementById("insp-list").textContent));
@@ -69,13 +68,40 @@ await page.waitForFunction(() => /送信済み/.test(document.getElementById("in
 const after = await page.textContent("#insp-list");
 if (shot("insp-list.png")) await page.screenshot({ path: shot("insp-list.png") });
 
+// 飛行後点検がまだの記録を開くと、「飛行後」の点検から見せる。切り替えると飛行前が見える
+await page.click("#insp-list .row .body");
+const openedPhase = await page.getAttribute("#insp-results", "data-phase");
+const postVisible = await page.isVisible('#insp-results .phase-post');
+await page.click('.phase-tabs label:has(input[value="pre"])');
+const preAbnormal = await page.isChecked('input[name="res-1"][value="異常"]');
+if (shot("insp-post.png")) await page.screenshot({ path: shot("insp-post.png") });
+await page.click("#insp-save");
+
+// 飛ばし終えたら、一覧から1回で飛行後点検を記録できる
+const beforePost = await page.textContent("#insp-list");
+await page.click("#insp-list .post-ok");
+await page.waitForFunction(() => /飛行後：全項目 正常/.test(document.getElementById("insp-list").textContent));
+const afterPost = await page.textContent("#insp-list");
+// 飛行後点検を記録したので、また「未送信」になる（Macへ送り直す）
+const resend = /未送信/.test(afterPost);
+await page.click("#insp-send");
+await page.waitForFunction((n) => window.__shared && window.__shared.text.includes("postResults"), null);
+const sentPost = JSON.parse((await page.evaluate(() => window.__shared)).text).inspections[0].postResults;
+
 // 開き直しても残っているか（IndexedDB に保存されたか）
 await page.reload({ waitUntil: "networkidle" });
 await page.click('.tab-btn[data-view="inspections"]');
 const persisted = await page.textContent("#insp-list");
 
-console.log(JSON.stringify({
-  place, before, sendLabel, fileName, after, persisted: persisted.includes("DJI Neo"), problems,
-}, null, 1));
+const result = {
+  place, before, sendLabel, fileName, after, persisted: persisted.includes("DJI Neo"),
+  飛行後の前: beforePost.includes("飛行後：未記録"), 飛行後の記録: afterPost.includes("飛行後：全項目 正常"),
+  送り直し: resend, 送った飛行後点検: Object.keys(sentPost || {}).length,
+  開いたときの点検: openedPhase, 飛行後が見える: postVisible, 飛行前の異常が残る: preAbnormal,
+  problems,
+};
+console.log(JSON.stringify(result, null, 1));
 await browser.close();
-process.exit(problems.length ? 1 : 0);
+const ok = !problems.length && result.persisted && result.飛行後の前 && result.飛行後の記録
+  && resend && result.送った飛行後点検 === 9 && openedPhase === "post" && postVisible && preAbnormal;
+process.exit(ok ? 0 : 1);

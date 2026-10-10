@@ -1,6 +1,7 @@
 // 日常点検記録（様式2）。
 //
-// 点検は飛行前に現場で行うので、iPhoneで記録しておき、あとからMac版へ送る。
+// 点検は飛行前と飛行後に現場で行うので、iPhoneで記録しておき、あとからMac版へ送る。
+// 飛行前（results）と飛行後（postResults）は同じ点検項目で、1日・1機体で1件の記録にまとめる。
 // このアプリはインターネット上に置かれ、Mac版はMacの中で動くため直接は
 // つながらない。そこで記録をファイルに書き出し、共有メニューから
 // iCloud Drive の「dji-log 飛行日誌」フォルダに保存してもらう。Mac版がその
@@ -10,7 +11,7 @@
 // 同じファイルを何度送っても重複しない。
 
 import {
-  DAILY_INSPECTION_ITEMS, INSPECTION_RESULTS, POST_FLIGHT_OK, SYNC_FORMAT, SYNC_VERSION,
+  DAILY_INSPECTION_ITEMS, INSPECTION_RESULTS, POST_FLIGHT_WORD, SYNC_FORMAT, SYNC_VERSION,
 } from "./constants.js";
 import * as db from "./db.js";
 import { reverseGeocode } from "./geocode.js";
@@ -43,6 +44,18 @@ export function inspectionSummary(results) {
   return { text: "全項目 正常", cls: "ok" };
 }
 
+/** 飛行後点検のまとめ。done は記録があるか（特記事項に書いた古い記録も含む）。 */
+export function postSummary(r) {
+  const post = r && r.postResults && typeof r.postResults === "object" ? r.postResults : {};
+  if (Object.keys(post).length) return { ...inspectionSummary(post), done: true };
+  if (String((r && r.notes) || "").includes(POST_FLIGHT_WORD)) {
+    return { text: "特記事項に記載", cls: "ok", done: true };
+  }
+  return { text: "未記録", cls: "muted", done: false };
+}
+
+const allOk = () => Object.fromEntries(DAILY_INSPECTION_ITEMS.map(([n]) => [n, "正常"]));
+
 const aircraftLabel = (a) =>
   a.registration ? `${a.name || a.serial}（${a.registration}）` : (a.name || a.serial);
 
@@ -70,21 +83,52 @@ export async function renderInspections() {
     const line1 = el("div", "line1");
     line1.append(el("span", "date", r.date));
     line1.append(el("span", "meta", r.aircraftName || "機体未選択"));
-    const s = inspectionSummary(r.results);
-    line1.append(el("span", `badge ${s.cls}`, s.text));
     line1.append(el("span", `badge ${isUnsent(r) ? "manual" : "muted"}`,
       isUnsent(r) ? "未送信" : "送信済み"));
     body.append(line1);
+    const s = inspectionSummary(r.results);
+    const p = postSummary(r);
+    const line2 = el("div", "line1");
+    line2.append(el("span", `badge ${s.cls}`, `飛行前：${s.text}`));
+    line2.append(el("span", `badge ${p.cls}`, `飛行後：${p.text}`));
+    body.append(line2);
     body.append(el("div", "meta", [r.inspector, r.place].filter(Boolean).join(" ／ ") || "—"));
-    body.onclick = () => openInspection(r.id);
+    body.onclick = () => openInspection(r.id, "", { phase: p.done ? "pre" : "post" });
     row.append(body);
+    if (!p.done) {
+      // 飛ばし終えたら、ここから1回で飛行後点検を記録できるようにする
+      const quick = el("button", "btn small", "飛行後も全項目正常");
+      quick.type = "button";
+      quick.className = "btn small post-ok";
+      quick.onclick = async () => {
+        if (!confirm(`${r.date} の飛行後点検を「全項目 正常」で記録します。`
+          + "実際に点検を行い、異常がなかった場合だけ記録してください。")) return;
+        await recordPostAllOk(r.id);
+      };
+      row.append(quick);
+    }
     box.append(row);
   }
 }
 
 // ---------- 入力 ----------
 
-export async function openInspection(id, presetSerial = "") {
+/** 飛行後点検を全項目「正常」で記録する（飛行前の記録はそのまま）。 */
+export async function recordPostAllOk(id) {
+  const r = await db.getInspection(id);
+  if (!r) return;
+  r.postResults = allOk();
+  r.updatedAt = new Date().toISOString();
+  await db.putInspection(r);
+  await renderInspections();
+  document.dispatchEvent(new Event("inspection-saved"));
+}
+
+/**
+ * 点検の記録を開く。phase は最初に見せる点検（"pre" 飛行前／"post" 飛行後）。
+ * 飛行前の記録がある日にもう一度開くのは、たいてい飛行後の点検を記録するとき。
+ */
+export async function openInspection(id, presetSerial = "", { phase = "" } = {}) {
   const settings = await db.getSettings();
   const aircraft = await db.getAllAircraft();
   let r = id ? await db.getInspection(id) : null;
@@ -98,11 +142,13 @@ export async function openInspection(id, presetSerial = "") {
       aircraftSerial: last ? last.serial : "",
       aircraftName: last ? (last.name || last.serial) : "",
       date: today(), place: "", inspector: settings.pilotName || "",
-      results: {}, itemRemarks: {}, notes: "",
+      results: {}, postResults: {}, itemRemarks: {}, notes: "",
       createdAt: new Date().toISOString(), updatedAt: "", sentAt: "",
     };
   }
+  if (!r.postResults || typeof r.postResults !== "object") r.postResults = {};
   editing = { record: r, isNew };
+  if (!phase) phase = !isNew && Object.keys(r.results || {}).length ? "post" : "pre";
 
   $("#insp-title").textContent = isNew ? "日常点検を記録" : r.date;
   const body = $("#insp-body");
@@ -160,31 +206,57 @@ export async function openInspection(id, presetSerial = "") {
   c1.append(whoField);
   body.append(c1);
 
-  // 点検結果
+  // 点検結果（飛行前・飛行後を切り替えて記録する。点検項目は同じ）
   const c2 = el("div", "card");
+  c2.id = "insp-results";
   const head = el("div", "card-head");
   head.append(el("h2", null, "点検結果"));
-  const allOk = el("button", "btn small", "すべて「正常」");
-  allOk.type = "button";
-  allOk.onclick = () => body.querySelectorAll('input[type=radio][value="正常"]')
-    .forEach((i) => { i.checked = true; });
-  head.append(allOk);
+  const allOkBtn = el("button", "btn small", "すべて「正常」");
+  allOkBtn.type = "button";
+  allOkBtn.id = "insp-all-ok";
+  allOkBtn.onclick = () => {
+    const prefix = c2.dataset.phase === "post" ? "post-" : "res-";
+    body.querySelectorAll(`input[type=radio][name^="${prefix}"][value="正常"]`)
+      .forEach((i) => { i.checked = true; });
+  };
+  head.append(allOkBtn);
   c2.append(head);
+  const phases = el("div", "seg phase-tabs");
+  const phaseHelp = el("p", "help");
+  const setPhase = (p) => {
+    c2.dataset.phase = p;
+    phases.querySelectorAll("input").forEach((i) => { i.checked = i.value === p; });
+    phaseHelp.textContent = p === "post"
+      ? "その日の飛行を終えたあとに行った点検の結果です。"
+      : "飛ばす前に行った点検の結果です。飛行後の点検は、飛ばし終えてから「飛行後」で記録します。";
+  };
+  for (const [value, label] of [["pre", "飛行前"], ["post", "飛行後"]]) {
+    const l = el("label", "chk");
+    const radio = el("input");
+    radio.type = "radio"; radio.name = "insp-phase"; radio.value = value;
+    radio.onchange = () => setPhase(value);
+    l.append(radio, document.createTextNode(label));
+    phases.append(l);
+  }
+  c2.append(phases, phaseHelp);
+  const segFor = (prefix, i, current) => {
+    const choices = el("div", `seg ${prefix === "post-" ? "phase-post" : "phase-pre"}`);
+    for (const v of INSPECTION_RESULTS) {
+      const l = el("label", "chk");
+      const radio = el("input");
+      radio.type = "radio"; radio.name = `${prefix}${i}`; radio.value = v;
+      radio.checked = current === v;
+      l.append(radio, document.createTextNode(v));
+      choices.append(l);
+    }
+    return choices;
+  };
   DAILY_INSPECTION_ITEMS.forEach(([name, desc], i) => {
     const item = el("div", "insp-item");
     const title = el("div", "insp-name");
     title.append(el("b", null, name), el("span", "meta", ` ${desc}`));
     item.append(title);
-    const choices = el("div", "seg");
-    for (const v of INSPECTION_RESULTS) {
-      const l = el("label", "chk");
-      const radio = el("input");
-      radio.type = "radio"; radio.name = `res-${i}`; radio.value = v;
-      radio.checked = r.results[name] === v;
-      l.append(radio, document.createTextNode(v));
-      choices.append(l);
-    }
-    item.append(choices);
+    item.append(segFor("res-", i, r.results[name]), segFor("post-", i, r.postResults[name]));
     const remark = el("input");
     remark.type = "text"; remark.className = "insp-remark"; remark.id = `rem-${i}`;
     remark.placeholder = "備考（任意）";
@@ -199,18 +271,10 @@ export async function openInspection(id, presetSerial = "") {
   c3.append(el("h2", null, "特記事項"));
   const notes = el("textarea");
   notes.id = "in-notes"; notes.rows = 3; notes.value = r.notes;
-  notes.placeholder = "点検で見つけた不具合など。飛行後点検を行った場合はその結果も記入します。";
+  notes.placeholder = "点検で見つけた不具合など";
   const notesField = el("label", "field");
   notesField.append(notes);
   c3.append(notesField);
-  const pf = el("button", "btn small", `「${POST_FLIGHT_OK}」を追記`);
-  pf.type = "button";
-  pf.onclick = () => {
-    if (!notes.value.includes(POST_FLIGHT_OK)) {
-      notes.value = notes.value ? `${notes.value.trimEnd()}\n${POST_FLIGHT_OK}` : POST_FLIGHT_OK;
-    }
-  };
-  c3.append(pf);
   if (!isNew) {
     const del = el("button", "btn danger block", "この点検記録を削除");
     del.type = "button";
@@ -236,8 +300,11 @@ export async function openInspection(id, presetSerial = "") {
   foot.append(save2);
   body.append(foot);
 
+  setPhase(phase);
   $("#insp-editor").hidden = false;
   body.scrollTop = 0;
+  // 飛行後の点検を記録しに開いたときは、点検結果から見せる
+  if (phase === "post" && !isNew) c2.scrollIntoView({ block: "start" });
 }
 
 async function fillPlace(input, btn) {
@@ -291,18 +358,26 @@ async function saveInspection() {
   r.place = $("#in-place").value.trim();
   r.inspector = $("#in-inspector").value.trim();
   r.results = {};
+  r.postResults = {};
   r.itemRemarks = {};
   DAILY_INSPECTION_ITEMS.forEach(([name], i) => {
     const checked = document.querySelector(`input[name="res-${i}"]:checked`);
     if (checked) r.results[name] = checked.value;
+    const post = document.querySelector(`input[name="post-${i}"]:checked`);
+    if (post) r.postResults[name] = post.value;
     const rem = $(`#rem-${i}`).value.trim();
     if (rem) r.itemRemarks[name] = rem;
   });
   r.notes = $("#in-notes").value.trim();
   r.updatedAt = new Date().toISOString();
 
+  // 飛行後の点検は飛ばし終えてから記録するので、空なのは当たり前。途中までのときだけ確かめる
   const blank = DAILY_INSPECTION_ITEMS.filter(([n]) => !r.results[n]).length;
-  if (blank && !confirm(`結果が未記入の項目が ${blank} 個あります。このまま保存しますか？`)) return;
+  if (blank && !confirm(`飛行前の点検で、結果が未記入の項目が ${blank} 個あります。このまま保存しますか？`)) return;
+  const postCount = Object.keys(r.postResults).length;
+  const postBlank = DAILY_INSPECTION_ITEMS.length - postCount;
+  if (postCount && postBlank
+    && !confirm(`飛行後の点検で、結果が未記入の項目が ${postBlank} 個あります。このまま保存しますか？`)) return;
 
   await db.putInspection(r);
   closeInspection();

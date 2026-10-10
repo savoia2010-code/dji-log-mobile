@@ -34,8 +34,9 @@ export const DAILY_INSPECTION_ITEMS = [
 // 結果欄は「正常」又は「異常」等の文言で記入する（要領 7.(2)b)）
 export const INSPECTION_RESULTS = ["正常", "異常"];
 
-// 特記事項の記入例（要領 7.(2)d)）
-export const POST_FLIGHT_OK = "飛行後点検：異常なし";
+// 飛行後点検を項目ごとに記録できるようにする前は、特記事項にこう書いていた
+// （そうした記録は「飛行後点検は特記事項に記載」と扱う。Mac版と同じ）
+export const POST_FLIGHT_WORD = "飛行後点検";
 
 // Mac版へ送るファイルの形式。Mac版の app/icloud.py と合わせること。
 export const SYNC_FORMAT = "dji-log-inspections";

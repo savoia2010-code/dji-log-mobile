@@ -21,7 +21,7 @@ import {
 import * as db from "./db.js";
 import { fmtDate, fmtTime, fmtDuration } from "./export.js";
 import { formatPlace } from "./geocode.js";
-import { inspectionSummary, openInspection } from "./inspections.js";
+import { inspectionSummary, openInspection, postSummary } from "./inspections.js";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -105,19 +105,31 @@ function dailyCard(r, localOnly) {
   const s = el("summary");
   s.append(el("span", "date", str(r.date)));
   const sum = inspectionSummary(obj(r.results));
-  s.append(el("span", `badge ${sum.cls}`, sum.text));
+  const post = postSummary({ postResults: obj(r.postResults), notes: str(r.notes) });
+  s.append(el("span", `badge ${sum.cls}`, `飛行前：${sum.text}`));
+  s.append(el("span", `badge ${post.cls}`, `飛行後：${post.text}`));
   if (localOnly) s.append(el("span", "badge manual", "iPhoneのみ"));
   d.append(s);
   kv(d, "実施場所", str(r.place));
   kv(d, "実施者", str(r.inspector));
   const table = el("div", "items");
   const results = obj(r.results);
+  const postResults = obj(r.postResults);
   const remarks = obj(r.itemRemarks);
+  const head = el("div", "item item-head");
+  head.append(el("span", null, "点検項目"), el("span", "muted", "飛行前 ／ 飛行後"));
+  table.append(head);
+  const resSpan = (v, empty) => {
+    const res = str(v) || empty;
+    return el("span", res === "異常" ? "ng" : res === "正常" ? "okt" : "muted", res);
+  };
   for (const [name] of DAILY_INSPECTION_ITEMS) {
     const row = el("div", "item");
     row.append(el("span", null, name));
-    const res = str(results[name]) || "未記入";
-    row.append(el("span", res === "異常" ? "ng" : res === "正常" ? "okt" : "muted", res));
+    const both = el("span");
+    both.append(resSpan(results[name], "未記入"), document.createTextNode(" ／ "),
+      resSpan(postResults[name], "—"));
+    row.append(both);
     table.append(row);
     if (remarks[name]) table.append(el("div", "item-remark", `└ ${str(remarks[name])}`));
   }
@@ -258,6 +270,13 @@ async function mergedAircraft(data) {
 
   for (const a of out) {
     const knownDaily = new Set(a.daily.map((r) => r.id));
+    // Macから届いたあとにこのiPhoneで直した記録（飛行後点検を足したなど）は、手元の方を見せる
+    const localById = new Map(localInspections.map((r) => [r.id, r]));
+    const time = (v) => { const t = Date.parse(v || ""); return Number.isNaN(t) ? 0 : t; };
+    a.daily = a.daily.map((r) => {
+      const mine = localById.get(r.id);
+      return mine && time(mine.updatedAt) >= time(r.updatedAt) ? { ...mine, local: true } : r;
+    });
     a.daily = [
       ...localInspections.filter((r) => r.aircraftSerial === a.serial && !knownDaily.has(r.id))
         .map((r) => ({ ...r, localOnly: true })),
@@ -282,7 +301,7 @@ function todayCard(aircraft, currentSerial, documents) {
   card.append(el("h2", null, `今日（${day}）の記録`));
 
   const insp = el("div", "today-row");
-  insp.append(el("span", "label", "日常点検"));
+  insp.append(el("span", "label", "飛行前点検"));
   if (inspected.length) {
     insp.append(el("span", "okt", `記録あり（${inspected.map((a) => a.label).join("、")}）`));
   } else {
@@ -295,6 +314,25 @@ function todayCard(aircraft, currentSerial, documents) {
   if (missing.length) {
     card.append(el("p", "help warn-text",
       `${missing.map((x) => x.a.label).join("、")} は今日飛行していますが、日常点検の記録がありません。`));
+  }
+
+  // 飛行後点検：今日の点検の記録のうち、飛行後の点検がまだのもの
+  const todays = aircraft.flatMap((a) => a.daily.filter((r) => r.date === day)
+    .map((r) => ({ a, r, post: postSummary({ postResults: obj(r.postResults), notes: str(r.notes) }) })));
+  const postPending = todays.filter((x) => !x.post.done);
+  if (todays.length) {
+    const pr2 = el("div", "today-row");
+    pr2.append(el("span", "label", "飛行後点検"));
+    if (!postPending.length) {
+      pr2.append(el("span", "okt", "記録あり"));
+    } else {
+      pr2.append(el("span", flown.length ? "ng" : "muted",
+        `まだです（${postPending.map((x) => x.a.label).join("、")}）`));
+    }
+    card.append(pr2);
+    if (postPending.length && flown.length) {
+      card.append(el("p", "help", "その日の飛行を終えたら、飛行後の点検をして記録してください。"));
+    }
   }
 
   // 許可書・承認書（審査要領 4-(18) により携行する）
@@ -335,7 +373,18 @@ function todayCard(aircraft, currentSerial, documents) {
   // 「記録」タブのボタン（実機で動いている）と同じく、同じ画面の入力を label で開く。
   const b2 = el("label", "btn small", "飛行記録を読み込む");
   b2.htmlFor = "carry-flight-input";
-  actions.append(b1, b2);
+  actions.append(b1);
+  // このiPhoneで記録した今日の点検に、飛行後点検を足す（Macで作った記録はMacで直す）
+  const own = postPending.find((x) => x.r.localOnly || x.r.local);
+  if (own) {
+    const b3 = el("button", "btn small", "飛行後点検を記録する");
+    b3.onclick = () => {
+      document.querySelector('.tab-btn[data-view="inspections"]').click();
+      openInspection(own.r.id, "", { phase: "post" });
+    };
+    actions.append(b3);
+  }
+  actions.append(b2);
   card.append(actions);
   return card;
 }
