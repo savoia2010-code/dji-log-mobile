@@ -78,7 +78,13 @@ const logbook = await page.evaluate(() => {
   const f = window.__shared[0];
   const wb = window.XLSX.read(new Uint8Array(f.bytes), { type: "array" });
   const rows = (name) => window.XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1 });
+  const s1 = rows("様式1 飛行記録");
+  const labels = s1.map((r) => r[0]);
+  const head = s1.find((r) => r[0] === "飛行年月日") || [];
   return { name: f.name, sheets: wb.SheetNames, 点検の行: rows("様式2 日常点検記録").length,
+           概要: { 設計製造者: (s1.find((r) => r[0] === "設計製造者") || [])[1], 製造番号: (s1.find((r) => r[0] === "製造番号") || [])[1],
+                   様式2にも: rows("様式2 日常点検記録").some((r) => r[0] === "製造番号") },
+           記事の欄: head.filter((h) => String(h).startsWith("記事：")),
            整備の行: rows("様式3 点検整備記録").length, 飛行の行: rows("様式1 飛行記録").length };
 });
 const submitRows = await page.$$eval("#carry-body .submit .submit-title", (n) => n.map((x) => x.textContent));
@@ -105,7 +111,9 @@ const expectDocs = !!data.documents && Object.keys(data.documents.aircraft || {}
 const docsOk = !expectDocs || (documents.機体の書類 && documents.許可書を開く && documents.今日の許可書);
 // 日誌のExcelは3様式。このiPhoneで記録した点検が様式2に入る（見出しまでで5〜6行あるので、それより多い）
 const t = target;
-const submitOk = logbook.sheets.length === 3 && logbook.点検の行 > 6
-  && (!t.maintenance.length || logbook.整備の行 > 6)
+const submitOk = logbook.sheets.length === 3 && logbook.点検の行 > 8
+  && logbook.概要.設計製造者 === "DJI" && logbook.概要.製造番号 === t.serial && logbook.概要.様式2にも
+  && logbook.記事の欄.length === 5
+  && (!t.maintenance.length || logbook.整備の行 > 8)
   && (!expectDocs || (submitRows.some((x) => x.startsWith("具備資料")) && lastShared && lastShared.head === "%PDF-"));
 process.exit(problems.length || !docsOk || !submitOk ? 1 : 0);

@@ -4,15 +4,16 @@ import { PURPOSES, SPECIFIED_FLIGHTS, DEFAULT_PURPOSE, display } from "./constan
 import * as db from "./db.js";
 import { parseLog } from "./parser.js";
 import { reverseGeocode, formatPlace } from "./geocode.js";
-import { buildLogbook, fileNameFor, fmtDate, fmtTime, fmtDuration } from "./export.js";
+import { fmtDate, fmtTime, fmtDuration } from "./export.js";
+import { buildLogbooks, shareBlob } from "./submit.js";
 import { bindInspections, renderInspections } from "./inspections.js";
-import { bindCarry, isInstalled, protectStorage, renderCarry } from "./carry.js";
+import { bindCarry, isInstalled, mergedAircraft, protectStorage, renderCarry } from "./carry.js";
 import * as gas from "./gas.js";
 import * as settingsSync from "./settingsSync.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.14.0";
+export const APP_VERSION = "0.15.0";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -308,10 +309,29 @@ async function openEditor(fileName) {
     return fl;
   };
   oCard.append(textField("飛行経路（概要）", "ed-route", f.route, "例: 離陸地点周辺を周回"));
-  oCard.append(textField("飛行の安全に影響のあった事項", "ed-issues", f.issues));
-  oCard.append(textField("その対応", "ed-issue-response", f.issueResponse));
-  oCard.append(textField("記事", "ed-remarks", f.remarks));
+  oCard.append(textField("飛行の安全に影響のあった事項", "ed-issues", f.issues,
+    "影響があった（おそれがあった）場合は、その内容と、飛行前後の機体の状況"));
   body.append(oCard);
+
+  // 記事（取扱要領 7.(1)l)）：不具合とその処置
+  const kCard = el("div", "card");
+  kCard.append(el("h2", null, "記事（不具合とその処置）"));
+  kCard.append(el("p", "help", "不具合が無ければ空欄のままで構いません。"));
+  const inputField = (label, id, value, type = "text", ph = "") => {
+    const fl = el("label", "field", label);
+    const i = el("input");
+    i.id = id; i.type = type; i.value = value || "";
+    if (ph) i.placeholder = ph;
+    fl.append(i);
+    return fl;
+  };
+  kCard.append(inputField("不具合事項", "ed-squawk", f.squawk, "text", "例: 着陸時にプロペラが接触し欠けた"));
+  kCard.append(inputField("発生年月日（空欄なら飛行した日）", "ed-squawk-date", f.squawkDate, "date"));
+  kCard.append(inputField("処置その他", "ed-issue-response", f.issueResponse, "text", "例: プロペラを交換"));
+  kCard.append(inputField("処置年月日", "ed-action-date", f.actionDate, "date"));
+  kCard.append(inputField("確認者", "ed-confirmer", f.confirmer, "text", "処置を確かめた人の氏名"));
+  kCard.append(textField("備考（その他のメモ）", "ed-remarks", f.remarks));
+  body.append(kCard);
 
   // 判定
   const jCard = el("div", "card");
@@ -348,6 +368,10 @@ async function saveEditor() {
   f.issues = $("#ed-issues").value.trim();
   f.issueResponse = $("#ed-issue-response").value.trim();
   f.remarks = $("#ed-remarks").value.trim();
+  f.squawk = $("#ed-squawk").value.trim();
+  f.squawkDate = $("#ed-squawk-date").value;
+  f.actionDate = $("#ed-action-date").value;
+  f.confirmer = $("#ed-confirmer").value.trim();
   const ov = document.querySelector('input[name="override"]:checked').value;
   f.manualOverride = ov === "auto" ? null : ov === "flight";
 
@@ -419,35 +443,19 @@ function renderSettings() {
 // ---------- 出力 ----------
 
 async function exportXlsx() {
+  // Macから受け取った日誌とこのiPhoneの記録を合わせて、様式1〜3を出す（携行タブの「提出」と同じ）
   const serial = $("#export-aircraft").value;
-  const flights = serial ? state.flights.filter((f) => f.aircraftSn === serial) : state.flights;
-  const aircraft = serial ? state.aircraft.filter((a) => a.serial === serial) : state.aircraft;
-
-  const target = flights.filter((f) =>
-    db.isFlight(f, state.settings.distanceThresholdM, state.settings.altitudeThresholdM, db.noGpsRule(state.settings)));
-  if (!target.length) {
-    alert("書き出す飛行記録がありません。");
+  const saved = await db.getCarry();
+  const all = await mergedAircraft(saved && saved.data);
+  const list = serial ? all.filter((a) => a.serial === serial) : all;
+  if (!list.some((a) => a.flights.length || a.daily.length || a.maintenance.length)) {
+    alert("書き出す記録がありません。");
     return;
   }
-
-  const blob = buildLogbook(flights, state.aircraft, state.settings);
-  const name = fileNameFor(serial ? aircraftLabel(aircraft[0]) : "");
-  const file = new File([blob], name, { type: blob.type });
-
-  // iOSでは共有シートから「ファイル」Appに保存できる
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file], title: name });
-      return;
-    } catch (e) {
-      if (e.name === "AbortError") return;
-    }
-  }
-  const url = URL.createObjectURL(blob);
-  const a = el("a");
-  a.href = url; a.download = name;
-  document.body.append(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  const one = list.length === 1 ? list[0] : null;
+  const name = `飛行日誌_${one ? (one.registration || one.label) : "全機体"}_${fmtDate(new Date().toISOString()).replace(/-/g, "")}.xlsx`
+    .replace(/[\\/:*?"<>|]/g, "_");
+  await shareBlob(buildLogbooks(list), name);
 }
 
 // ---------- 起動 ----------

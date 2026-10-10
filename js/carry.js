@@ -19,7 +19,7 @@ import {
   CARRY_FORMAT, CARRY_VERSION, DAILY_INSPECTION_ITEMS, ICLOUD_FOLDER, display,
 } from "./constants.js";
 import * as db from "./db.js";
-import { fmtDate, fmtTime, fmtDuration } from "./export.js";
+import { fmtDate, fmtTime, fmtDuration, fmtLanding, pilotLabel } from "./export.js";
 import { formatPlace } from "./geocode.js";
 import { inspectionSummary, openInspection, postSummary } from "./inspections.js";
 import { submitSection } from "./submit.js";
@@ -180,8 +180,14 @@ function flightCard(f) {
   kv(d, "着陸場所", str(f.landing_place));
   kv(d, "総飛行時間", str(f.total_time));
   kv(d, "飛行の安全に影響のあった事項", str(f.issues));
-  kv(d, "対応", str(f.issue_response));
-  kv(d, "記事", str(f.remarks));
+  if (str(f.squawk)) {
+    kv(d, "記事：不具合事項", `${str(f.squawk)}（${str(f.squawk_date)}）`);
+    kv(d, "記事：処置", [str(f.issue_response), str(f.action_date)].filter(Boolean).join("（") + (f.action_date ? "）" : ""));
+    kv(d, "記事：確認者", str(f.confirmer));
+  } else {
+    kv(d, "対応", str(f.issue_response));
+  }
+  kv(d, "備考", str(f.remarks));
   return d;
 }
 
@@ -230,12 +236,15 @@ function localFlightRows(localFlights, macFlights, settings, aircraft) {
     }
     const place = formatPlace(f.place, f.lat, f.lon);
     rows.push({
-      file: f.fileName, date, takeoff_time: time, landing_time: fmtTime(f.landingTime),
+      file: f.fileName, date, takeoff_time: time, landing_time: fmtLanding(f.takeoffTime, f.landingTime),
       duration: fmtDuration(f.durationSeconds), total_time: totalText,
-      pilot: settings.pilotName || "", purpose: display(f.purpose),
+      pilot: pilotLabel(settings), purpose: display(f.purpose),
       specified_flight: display(f.specifiedFlight), route: f.route || "",
       takeoff_place: place, landing_place: place,
       issues: f.issues || "", issue_response: f.issueResponse || "", remarks: f.remarks || "",
+      // 記事（取扱要領 7.(1)l)）。発生年月日は、入れていなければ飛行した日
+      squawk: f.squawk || "", squawk_date: f.squawk ? (f.squawkDate || date) : "",
+      action_date: f.actionDate || "", confirmer: f.confirmer || "",
       localOnly: true,
     });
   }
@@ -243,7 +252,7 @@ function localFlightRows(localFlights, macFlights, settings, aircraft) {
 }
 
 /** Macの日誌とこのiPhoneの記録を、機体ごとに合わせる。 */
-async function mergedAircraft(data) {
+export async function mergedAircraft(data) {
   const settings = await db.getSettings();
   const localAircraft = await db.getAllAircraft();
   const localFlights = await db.getAllFlights();

@@ -55,12 +55,16 @@ export function openBlob(blob) {
 
 // ---------- 飛行日誌（様式1・2・3）のExcel ----------
 
+// Mac版の様式1（app/export.py の HEADERS）と同じ並び
 const FLIGHT_HEADERS = [
   ["飛行年月日", "date"], ["飛行させた者の氏名", "pilot"], ["飛行の目的", "purpose"],
   ["特定飛行", "specified_flight"], ["飛行経路", "route"], ["離陸場所", "takeoff_place"],
   ["着陸場所", "landing_place"], ["離陸時刻", "takeoff_time"], ["着陸時刻", "landing_time"],
   ["飛行時間", "duration"], ["総飛行時間", "total_time"],
-  ["飛行の安全に影響のあった事項", "issues"], ["対応", "issue_response"], ["記事", "remarks"],
+  ["飛行の安全に影響のあった事項", "issues"],
+  ["記事：発生年月日", "squawk_date"], ["記事：不具合事項", "squawk"],
+  ["記事：処置年月日", "action_date"], ["記事：処置その他", "issue_response"],
+  ["記事：確認者", "confirmer"], ["備考", "remarks"],
 ];
 const MAINT_HEADERS = [
   ["実施年月日", "date"], ["総飛行時間", "total_time"],
@@ -68,11 +72,28 @@ const MAINT_HEADERS = [
   ["実施者", "engineer"], ["備考", "remarks"],
 ];
 
+/**
+ * 冒頭に書く「無人航空機の概要」（取扱要領 6.(1)d)ア〜エ）。Macから受け取った概要を使い、
+ * Macにまだ無い機体は分かる範囲で書く。
+ */
+function overviewLines(ac) {
+  const ov = obj(ac.overview);
+  const maker = str(ov.manufacturer) || (/^dji/i.test(str(ac.name) || str(ac.model)) ? "DJI" : "");
+  const lines = [
+    ["無人航空機の登録記号", str(ov.registration) || str(ac.registration)],
+    ["型式", str(ov.model) || str(ac.model)],
+    ["設計製造者", maker],
+    ["製造番号", str(ov.serial) || str(ac.serial)],
+  ];
+  if (str(ov.type_cert_number)) lines.push(["型式認証書番号", str(ov.type_cert_number)]);
+  if (str(ov.airworthiness)) lines.push(["機体認証の区分・機体認証書番号", str(ov.airworthiness)]);
+  return lines;
+}
+
 function sheet(XLSX, title, ac, headers, rows, widths, notes = []) {
   const aoa = [
     [title],
-    ["無人航空機の登録記号", str(ac.registration)],
-    ["型式", str(ac.model)],
+    ...overviewLines(ac),
     ...notes.map((n) => [n]),
     [],
     headers,
@@ -85,18 +106,39 @@ function sheet(XLSX, title, ac, headers, rows, widths, notes = []) {
 
 /** 1機分の飛行日誌（様式1・2・3）を1つのExcelにする。 */
 export function buildFullLogbook(ac) {
+  return buildLogbooks([ac]);
+}
+
+/** 複数の機体の飛行日誌を1つのExcelにする（機体ごとに様式1・2・3のシート）。 */
+export function buildLogbooks(list) {
   const XLSX = window.XLSX;
   const wb = XLSX.utils.book_new();
+  const used = new Set();
+  const sheetName = (base) => {
+    let name = base.replace(/[:\\/?*[\]]/g, "").slice(0, 31);
+    for (let n = 2; used.has(name); n++) name = `${base.slice(0, 26)} (${n})`;
+    used.add(name);
+    return name;
+  };
+  // 1機なら「様式1 飛行記録」、複数の機体なら「様式1 JU…」のように機体を添える
+  for (const ac of list) {
+    const tag = str(ac.registration) || str(ac.label) || str(ac.serial);
+    appendLogbook(XLSX, wb, ac, (form, title) => sheetName(list.length > 1 ? `${form} ${tag}` : `${form} ${title}`));
+  }
+  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  return new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
 
+function appendLogbook(XLSX, wb, ac, nameFor) {
   const flights = [...list(ac.flights)].sort((a, b) =>
     `${str(a.date)} ${str(a.takeoff_time)}`.localeCompare(`${str(b.date)} ${str(b.takeoff_time)}`));
   XLSX.utils.book_append_sheet(wb, sheet(XLSX, "飛行記録（様式1）", ac,
     FLIGHT_HEADERS.map(([h]) => h),
     flights.map((f) => FLIGHT_HEADERS.map(([, k]) => str(f[k]))),
-    [12, 14, 18, 26, 24, 26, 26, 8, 8, 10, 12, 28, 20, 28],
+    [12, 14, 18, 26, 24, 26, 26, 8, 10, 10, 12, 28, 12, 24, 12, 24, 12, 24],
     flights.some((f) => f.localOnly)
       ? ["※総飛行時間の「暫定」は、このiPhoneで読み込みMacの日誌にまだ無い飛行（Macに取り込むと確定）。"]
-      : []), "様式1 飛行記録");
+      : []), nameFor("様式1", "飛行記録"));
 
   const daily = [...list(ac.daily)].sort((a, b) => str(a.date).localeCompare(str(b.date)));
   const items = DAILY_INSPECTION_ITEMS;
@@ -115,17 +157,14 @@ export function buildFullLogbook(ac) {
       ];
     }),
     [12, 24, 14, ...items.map(() => 11), 16, 24, 28],
-    ["点検項目ごとの結果は飛行前の点検。飛行後の点検（同じ項目）は「飛行後点検」欄。"]), "様式2 日常点検記録");
+    ["点検項目ごとの結果は飛行前の点検。飛行後の点検（同じ項目）は「飛行後点検」欄。"]), nameFor("様式2", "日常点検記録"));
 
   XLSX.utils.book_append_sheet(wb, sheet(XLSX, "点検整備記録（様式3）", ac,
     MAINT_HEADERS.map(([h]) => h),
     list(ac.maintenance).map((m) => MAINT_HEADERS.map(([, k]) => str(m[k]))),
     [12, 10, 40, 20, 24, 14, 28],
     ["※総飛行時間は、前回の機体認証を受検するにあたり実施した点検整備以降の総飛行時間。"
-      + "機体認証を受けていない無人航空機は、点検整備作業を実施した時点での総飛行時間。"]), "様式3 点検整備記録");
-
-  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-  return new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      + "機体認証を受けていない無人航空機は、点検整備作業を実施した時点での総飛行時間。"]), nameFor("様式3", "点検整備記録"));
 }
 
 export const logbookFileName = (ac) =>
