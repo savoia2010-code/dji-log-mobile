@@ -21,7 +21,7 @@ const context = await browser.newContext({
   ...devices["iPhone 15"],
   acceptDownloads: true,
   permissions: ["geolocation"],
-  geolocation: { latitude: 34.4097, longitude: 133.2012 }, // 尾道市内（陸上）
+  geolocation: { latitude: 34.3955, longitude: 132.4536 }, // 広島市の平和記念公園付近（公共の場所）
 });
 const page = await context.newPage();
 await page.addInitScript(() => {
