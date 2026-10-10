@@ -109,6 +109,22 @@ const inbox = (await callMock("listInbox")).items || [];
 const sentRecords = inbox.flatMap((i) => JSON.parse(i.content).inspections || []);
 const backup = (await callMock("getBackup")).backup;
 
+// 設定（飛行とみなす距離）と機体の情報（Macに無い、使い始める前の飛行時間）もバックアップに残る
+await page.evaluate(async () => {
+  const db = await import("./js/db.js");
+  await db.setSetting("distanceThresholdM", 5);
+  const a = (await db.getAllAircraft()).find((x) => x.serial === "SN-TEST-0001");
+  await db.putAircraft({ ...a, initialFlightSeconds: 3600 });
+});
+await page.click('.tab-btn[data-view="settings"]');
+await page.click("#gas-sync");
+for (let i = 0; i < 100; i++) {
+  const b = (await callMock("getBackup")).backup;
+  if (b && b.settings && b.settings.distanceThresholdM === 5) break;
+  await page.waitForTimeout(100);
+}
+const backedUpSettings = ((await callMock("getBackup")).backup || {}).settings || {};
+
 // iPhoneの中身が消えた場合: 保存先を消して開き直し、設定し直して戻す
 // アプリが保存先を開いたままだと消せないので、アプリの無いページ（同じ場所）へ移ってから消す
 await page.goto(new globalThis.URL("manifest.webmanifest", URL).href);
@@ -131,6 +147,12 @@ await page.click('.tab-btn[data-view="inspections"]');
 await page.waitForFunction(() => /全項目 正常/.test(document.getElementById("insp-list").textContent),
   null, { timeout: 10000 }).catch(() => {});
 const restored = await page.textContent("#insp-list");
+const restoredSettings = await page.evaluate(async () => {
+  const db = await import("./js/db.js");
+  const a = (await db.getAllAircraft()).find((x) => x.serial === "SN-TEST-0001");
+  return { 距離: (await db.getSettings()).distanceThresholdM, 使い始める前の飛行時間: a && a.initialFlightSeconds,
+           画面の距離: document.getElementById("dist-threshold").value };
+});
 
 // 合言葉が違う設定コードでは同期できないことを知らせる
 const wrong = "DJILOG1:" + Buffer.from(JSON.stringify({ url: SCRIPT, token: "wrong" }))
@@ -159,6 +181,7 @@ const result = {
   送られた点検: sentRecords.length, バックアップの点検: backup ? backup.inspections.length : 0,
   戻したあと: restored.includes("全項目 正常"), 合言葉違い: wrongStatus,
   読み込み直しで原本を送った: resentOld,
+  バックアップの設定: backedUpSettings, 戻した設定: restoredSettings,
   空のときに戻すか聞いた: dialogs.some((m) => m.includes("バックアップがあります")),
   変更なしの同期: idleActions,
   飛行記録の送信: { 件数: logs.length, 名前: logs[0] && logs[0].name, 中身が同じ: sameBytes, 残り: outboxLeft },
@@ -169,7 +192,8 @@ const result = {
 console.log(JSON.stringify(result, null, 1));
 await browser.close();
 const ok = result.日誌の受信 && result.送られた点検 === 1 && result.バックアップの点検 === 1
-  && result.戻したあと && result.空のときに戻すか聞いた && resentOld && !idleActions.includes("putBackup") && idleActions.includes("getCarry")
+  && result.戻したあと && result.空のときに戻すか聞いた && restoredSettings.距離 === 5
+  && restoredSettings.使い始める前の飛行時間 === 3600 && restoredSettings.画面の距離 === "5" && resentOld && !idleActions.includes("putBackup") && idleActions.includes("getCarry")
   && result.受け取った日誌の時刻 && logs.length === 1 && logs[0].name === LOG_NAME && sameBytes && outboxLeft === 0 && /合言葉/.test(wrongStatus) && !problems.length
   && hashGone && copyOffered && /設定しました/.test(qrDialogs[0] || "");
 process.exit(ok ? 0 : 1);

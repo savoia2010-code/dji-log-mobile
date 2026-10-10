@@ -11,7 +11,7 @@ import * as gas from "./gas.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.12.1";
+export const APP_VERSION = "0.12.2";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -568,7 +568,8 @@ async function offerRestore(n) {
     await refresh();
     await renderCarry();
     await renderInspections();
-    alert(`戻しました（飛行 ${r.flights}件・点検 ${r.inspections}件）。`);
+    renderSettings();
+    alert(`戻しました（飛行 ${r.flights}件・点検 ${r.inspections}件${r.settings ? "・設定" : ""}）。`);
   } catch (e) {
     alert(e.message);
   }
@@ -596,7 +597,8 @@ function bindGas() {
       await refresh();
       await renderCarry();
       await renderInspections();
-      alert(`戻しました（点検 ${r.inspections}件・飛行 ${r.flights}件）。`);
+      renderSettings();
+      alert(`戻しました（点検 ${r.inspections}件・飛行 ${r.flights}件${r.settings ? "・設定" : ""}）。`);
     } catch (e) {
       alert(e.message);
     }

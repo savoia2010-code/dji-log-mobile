@@ -127,6 +127,12 @@ export async function getSettings() {
   return out;
 }
 
+/** 利用者が実際に保存した設定だけ（初期値で補わない）。バックアップに使う。 */
+export async function getStoredSettings() {
+  const rows = await tx("settings", "readonly", (s) => s.getAll());
+  return Object.fromEntries((rows || []).map((r) => [r.key, r.value]));
+}
+
 export async function setSetting(key, value) {
   return tx("settings", "readwrite", (s) => s.put({ key, value }));
 }
