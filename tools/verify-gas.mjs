@@ -88,6 +88,8 @@ await page.click("#gas-restore");
 // 確認と結果の2つの案内が出終わるのを待つ
 for (let i = 0; i < 50 && dialogs.length < before + 2; i++) await page.waitForTimeout(100);
 await page.click('.tab-btn[data-view="inspections"]');
+await page.waitForFunction(() => /全項目 正常/.test(document.getElementById("insp-list").textContent),
+  null, { timeout: 10000 }).catch(() => {});
 const restored = await page.textContent("#insp-list");
 
 // 合言葉が違う設定コードでは同期できないことを知らせる

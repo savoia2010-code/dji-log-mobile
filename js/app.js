@@ -552,6 +552,7 @@ function bindGas() {
       const r = await gas.restoreFromBackup();
       await refresh();
       await renderCarry();
+      await renderInspections();
       alert(`戻しました（点検 ${r.inspections}件・飛行 ${r.flights}件）。`);
     } catch (e) {
       alert(e.message);
