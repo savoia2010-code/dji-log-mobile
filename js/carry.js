@@ -425,12 +425,23 @@ function photo(src, caption) {
   if (src && str(src).startsWith("data:image/")) {
     const img = el("img");
     img.src = src; img.alt = caption; img.loading = "lazy";
+    // 提示するときに見やすいよう、押すと画面いっぱいに出す
+    img.onclick = () => showLarge(src, caption);
     fig.append(img);
   } else {
     fig.append(el("div", "doc-photo-none", "なし"));
   }
   fig.append(el("figcaption", null, caption));
   return fig;
+}
+
+function showLarge(src, caption) {
+  const overlay = el("div", "photo-overlay");
+  const img = el("img");
+  img.src = src; img.alt = caption;
+  overlay.append(img, el("div", "photo-overlay-caption", `${caption}（タップで閉じる）`));
+  overlay.onclick = () => overlay.remove();
+  document.body.append(overlay);
 }
 
 /** 機体ごとの具備資料（製造者・名称・重量等／運用限界等／追加基準への適合性）。 */
