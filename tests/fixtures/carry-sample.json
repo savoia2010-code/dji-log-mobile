@@ -10,20 +10,172 @@
    "registration": "JU0000000000",
    "model": "DJI Neo",
    "flights": [
-    {"file": "DJIFlightRecord_2026-07-13_[10-00-00].txt", "date": "2026-07-13", "pilot": "見本 太郎",
-     "purpose": "空撮", "specified_flight": "", "route": "", "takeoff_place": "東京都千代田区千代田1番付近",
-     "landing_place": "東京都千代田区千代田1番付近", "takeoff_time": "10:00", "landing_time": "11:00",
-     "duration": "1:00", "total_time": "1:00", "issues": "", "issue_response": "", "remarks": ""},
-    {"file": "DJIFlightRecord_2026-07-14_[10-00-00].txt", "date": "2026-07-14", "pilot": "見本 太郎",
-     "purpose": "空撮", "specified_flight": "", "route": "", "takeoff_place": "東京都千代田区千代田1番付近",
-     "landing_place": "東京都千代田区千代田1番付近", "takeoff_time": "10:00", "landing_time": "10:10",
-     "duration": "0:10", "total_time": "1:10", "issues": "", "issue_response": "", "remarks": ""}
+    {
+     "file": "DJIFlightRecord_2026-07-13_[10-00-00].txt",
+     "date": "2026-07-13",
+     "pilot": "見本 太郎",
+     "purpose": "空撮",
+     "specified_flight": "",
+     "route": "",
+     "takeoff_place": "東京都千代田区千代田1番付近",
+     "landing_place": "東京都千代田区千代田1番付近",
+     "takeoff_time": "10:00",
+     "landing_time": "11:00",
+     "duration": "1:00",
+     "total_time": "1:00",
+     "issues": "",
+     "issue_response": "",
+     "remarks": ""
+    },
+    {
+     "file": "DJIFlightRecord_2026-07-14_[10-00-00].txt",
+     "date": "2026-07-14",
+     "pilot": "見本 太郎",
+     "purpose": "空撮",
+     "specified_flight": "",
+     "route": "",
+     "takeoff_place": "東京都千代田区千代田1番付近",
+     "landing_place": "東京都千代田区千代田1番付近",
+     "takeoff_time": "10:00",
+     "landing_time": "10:10",
+     "duration": "0:10",
+     "total_time": "1:10",
+     "issues": "",
+     "issue_response": "",
+     "remarks": ""
+    }
    ],
    "daily": [],
    "maintenance": [
-    {"date": "2026-07-01", "total_time": "0:00", "detail": "プロペラ交換（見本）", "reason": "定期交換",
-     "place": "", "engineer": "見本 太郎", "remarks": ""}
+    {
+     "date": "2026-07-01",
+     "total_time": "0:00",
+     "detail": "プロペラ交換（見本）",
+     "reason": "定期交換",
+     "place": "",
+     "engineer": "見本 太郎",
+     "remarks": ""
+    }
    ]
   }
- ]
+ ],
+ "documents": {
+  "spec_fields": [
+   [
+    "manufacturer",
+    "製造者名"
+   ],
+   [
+    "name",
+    "名称"
+   ],
+   [
+    "weight_kg",
+    "総重量（最大離陸重量）kg"
+   ],
+   [
+    "controller_manufacturer",
+    "操縦装置の製造者名"
+   ],
+   [
+    "controller_name",
+    "操縦装置の名称"
+   ]
+  ],
+  "limit_fields": [
+   [
+    "max_speed_kmh",
+    "最高速度（km/h）"
+   ],
+   [
+    "max_altitude_m",
+    "最高到達高度（m）"
+   ],
+   [
+    "radio_range_m",
+    "電波到達距離（m）"
+   ],
+   [
+    "max_wind_ms",
+    "飛行可能風速（m/s以下）"
+   ],
+   [
+    "max_payload_kg",
+    "最大搭載可能重量（kg）"
+   ],
+   [
+    "max_flight_time_min",
+    "最大使用可能時間（分）"
+   ]
+  ],
+  "photo_slots": {
+   "front": "機体（前）",
+   "top": "機体（上）",
+   "side": "機体（ヨコ）",
+   "controller": "操縦装置",
+   "ops_body": "運用限界：機体",
+   "ops_video": "運用限界：映像伝送装置",
+   "ops_controller": "運用限界：操縦装置"
+  },
+  "aircraft": {
+   "SN-TEST-0001": {
+    "serial": "SN-TEST-0001",
+    "label": "テスト機（JU0000000000）",
+    "registration": "JU0000000000",
+    "spec": {
+     "manufacturer": "見本製作所",
+     "name": "テスト機",
+     "weight_kg": "0.249",
+     "controller_manufacturer": "見本製作所",
+     "controller_name": "見本送信機",
+     "max_speed_kmh": "57.6",
+     "max_altitude_m": "4000",
+     "radio_range_m": "10000",
+     "max_wind_ms": "10.7",
+     "max_payload_kg": "",
+     "max_flight_time_min": "30",
+     "flight_method": "送信機による手動操縦（見本）"
+    },
+    "categories": [
+     {
+      "id": "night",
+      "clause": "5-3",
+      "heading": "夜間飛行",
+      "requirements": [
+       {
+        "id": "night-1",
+        "standard": "機体について、無人航空機の姿勢及び方向が正確に視認できるよう灯火を有していること。ただし、無人航空機の飛行範囲が照明等で十分照らされている場合は、この限りでない。",
+        "compliance": "適"
+       }
+      ]
+     }
+    ],
+    "photos": {
+     "front": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    },
+    "updated_at": "2026-07-01T09:00:00+09:00"
+   }
+  },
+  "permits": [
+   {
+    "number": "見本第0001号",
+    "valid_from": "2026-04-01",
+    "valid_to": "2099-03-31",
+    "note": "DID・夜間（見本）",
+    "file_name": "見本許可書.pdf",
+    "pdf": "JVBERi0xLjQKJSBzYW1wbGUK"
+   }
+  ],
+  "insurance": [
+   {
+    "company": "見本損保",
+    "policy_number": "S-0001",
+    "bodily": "1億円",
+    "property": "5千万円",
+    "valid_from": "2026-04-01",
+    "valid_to": "2099-03-31",
+    "note": ""
+   }
+  ]
+ }
 }

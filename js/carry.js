@@ -226,6 +226,13 @@ async function mergedAircraft(data) {
     model: str(a.model), flights: list(a.flights), daily: list(a.daily),
     maintenance: list(a.maintenance),
   }));
+  // 具備資料だけがある機体（まだ飛ばしていない機体など）も載せる
+  for (const [serial, d] of Object.entries(obj(data && data.documents && data.documents.aircraft))) {
+    if (!out.some((a) => a.serial === serial)) {
+      out.push({ serial, label: str(d.label) || serial, registration: str(d.registration),
+        model: str(obj(d.spec).name), flights: [], daily: [], maintenance: [] });
+    }
+  }
   // Macの日誌に無い機体でも、このiPhoneに記録があれば載せる
   const serials = new Set([
     ...localFlights.map((f) => f.aircraftSn), ...localInspections.map((r) => r.aircraftSerial),
@@ -256,7 +263,7 @@ async function mergedAircraft(data) {
 }
 
 /** 今日の点検と飛行が記録されているかを、いちばん上に示す。 */
-function todayCard(aircraft, currentSerial) {
+function todayCard(aircraft, currentSerial, documents) {
   const day = today();
   const inspected = aircraft.filter((a) => a.daily.some((r) => r.date === day));
   const flown = aircraft.map((a) => ({ a, n: a.flights.filter((f) => f.date === day).length }))
@@ -279,6 +286,21 @@ function todayCard(aircraft, currentSerial) {
     card.append(el("p", "help warn-text",
       `${missing.map((x) => x.a.label).join("、")} は今日飛行していますが、日常点検の記録がありません。`));
   }
+
+  // 許可書・承認書（審査要領 4-(18) により携行する）
+  const permit = latestPermit(documents);
+  const pr = el("div", "today-row");
+  pr.append(el("span", "label", "許可書"));
+  if (!permit) {
+    pr.append(el("span", "muted", "登録なし"));
+  } else {
+    const e = expiryState(permit.valid_to);
+    pr.append(el("span", e.state === "expired" ? "ng" : e.state === "soon" ? "ng" : "okt",
+      e.state === "expired" ? `期限切れ（${permit.valid_to}まで）`
+        : `${permit.valid_to ? `${permit.valid_to}まで` : "期間未入力"}`
+          + (e.state === "soon" ? `（あと${e.days}日）` : "")));
+  }
+  card.append(pr);
 
   const fl = el("div", "today-row");
   fl.append(el("span", "label", "飛行記録"));
@@ -340,7 +362,7 @@ export async function renderCarry() {
   }
   const todayBox = $("#carry-today");
   todayBox.innerHTML = "";
-  todayBox.append(todayCard(aircraft, selectedSerial));
+  todayBox.append(todayCard(aircraft, selectedSerial, saved && saved.data.documents));
   if (!aircraft.length) {
     box.append(el("div", "empty", "表示できる記録がまだありません。"));
     return;
@@ -368,6 +390,11 @@ export async function renderCarry() {
   }
   box.append(head);
 
+  const documents = saved && saved.data.documents;
+  const doc = documents && obj(documents.aircraft)[ac.serial];
+  box.append(documentsSection(documents, doc));
+  box.append(permitsSection(documents));
+
   box.append(section("日常点検記録", ac.daily.length, true,
     ac.daily.map((r) => dailyCard(r, !!r.localOnly)), "記録はありません。"));
   box.append(section("点検整備記録", ac.maintenance.length, true,
@@ -376,6 +403,146 @@ export async function renderCarry() {
   const flewToday = ac.flights.some((f) => f.date === today());
   box.append(section("飛行記録", ac.flights.length, flewToday,
     [...ac.flights].reverse().map(flightCard), "記録はありません。"));
+}
+
+// ---------- 具備資料 ----------
+
+function expiryState(validTo) {
+  if (!validTo) return { state: "unknown", days: null };
+  const end = new Date(`${validTo}T23:59:59`);
+  const days = Math.floor((end - new Date()) / 86400000);
+  return { state: days < 0 ? "expired" : days <= 30 ? "soon" : "ok", days };
+}
+
+function latestPermit(documents) {
+  const dated = list(documents && documents.permits).filter((p) => p.valid_to);
+  if (!dated.length) return list(documents && documents.permits)[0] || null;
+  return dated.reduce((a, b) => (str(a.valid_to) >= str(b.valid_to) ? a : b));
+}
+
+function photo(src, caption) {
+  const fig = el("figure", "doc-photo");
+  if (src && str(src).startsWith("data:image/")) {
+    const img = el("img");
+    img.src = src; img.alt = caption; img.loading = "lazy";
+    fig.append(img);
+  } else {
+    fig.append(el("div", "doc-photo-none", "なし"));
+  }
+  fig.append(el("figcaption", null, caption));
+  return fig;
+}
+
+/** 機体ごとの具備資料（製造者・名称・重量等／運用限界等／追加基準への適合性）。 */
+function documentsSection(documents, doc) {
+  const d = el("details", "card section");
+  d.append(el("summary", "section-title", "具備資料（機体）"));
+  if (!doc) {
+    d.append(el("p", "help", "この機体の具備資料はまだありません。Mac版の「具備資料」で作ると、受け取ったときにここに入ります。"));
+    return d;
+  }
+  const spec = obj(doc.spec);
+  const photos = obj(doc.photos);
+  const slots = obj(documents.photo_slots);
+
+  d.append(el("h3", "doc-title", "無人航空機の製造者、名称、重量等"));
+  kv(d, "登録記号", str(doc.registration) || "（未入力）");
+  for (const [key, label] of list(documents.spec_fields)) kv(d, str(label), str(spec[key]));
+  const g1 = el("div", "doc-photos");
+  for (const slot of ["front", "top", "side", "controller"]) g1.append(photo(photos[slot], str(slots[slot])));
+  d.append(g1);
+
+  d.append(el("h3", "doc-title", "無人航空機の運用限界等"));
+  for (const [key, label] of list(documents.limit_fields)) {
+    kv(d, str(label), str(spec[key]) || (key === "max_payload_kg" ? "記載なし" : ""));
+  }
+  const g2 = el("div", "doc-photos");
+  for (const slot of ["ops_body", "ops_video", "ops_controller"]) g2.append(photo(photos[slot], str(slots[slot]).replace("運用限界：", "")));
+  d.append(g2);
+  kv(d, "飛行させる方法", str(spec.flight_method));
+
+  const cats = list(doc.categories);
+  if (cats.length) {
+    d.append(el("h3", "doc-title", "無人航空機の追加基準への適合性"));
+    for (const c of cats) {
+      d.append(el("div", "doc-cat", `○${str(c.heading)}`));
+      for (const r of list(c.requirements)) {
+        const box = el("div", "doc-req");
+        box.append(el("div", "doc-std", str(r.standard)));
+        box.append(el("div", "doc-comp", str(r.compliance) || "（未入力）"));
+        const p = photos[`req:${str(r.id)}`];
+        if (p) box.append(photo(p, "適合性を示す写真"));
+        d.append(box);
+      }
+    }
+    d.append(el("p", "help", "基準は「無人航空機の飛行に関する許可・承認の審査要領（カテゴリーⅡ飛行）」5. による。"));
+  }
+  return d;
+}
+
+function base64ToBlob(b64, type) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type });
+}
+
+/** 許可書・承認書（PDFを開ける）と保険。 */
+function permitsSection(documents) {
+  const d = el("details", "card section");
+  const permits = list(documents && documents.permits);
+  const insurance = list(documents && documents.insurance);
+  d.append(el("summary", "section-title", `許可書・承認書と保険（${permits.length + insurance.length}件）`));
+  if (!permits.length) d.append(el("p", "help", "許可書・承認書は登録されていません。"));
+  for (const p of permits) {
+    const box = el("div", "rec");
+    const e = expiryState(str(p.valid_to));
+    const head = el("div", "line1");
+    head.append(el("span", "date", str(p.number) || "許可書・承認書"));
+    if (e.state === "expired") head.append(el("span", "badge warn", "期限切れ"));
+    else if (e.state === "soon") head.append(el("span", "badge manual", `あと${e.days}日`));
+    box.append(head);
+    kv(box, "期間", `${str(p.valid_from)}〜${str(p.valid_to)}`);
+    kv(box, "内容", str(p.note));
+    if (p.pdf) {
+      const actions = el("div", "today-actions");
+      const name = str(p.file_name) || "許可書.pdf";
+      // 開くのはブラウザの表示に任せる。開けない環境では「共有・保存」から見られる
+      const open = el("button", "btn small", "許可書のPDFを開く");
+      open.onclick = () => {
+        const url = URL.createObjectURL(base64ToBlob(str(p.pdf), "application/pdf"));
+        window.open(url, "_blank");
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      };
+      const share = el("button", "btn small", "共有・保存");
+      share.onclick = async () => {
+        const file = new File([base64ToBlob(str(p.pdf), "application/pdf")], name, { type: "application/pdf" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try { await navigator.share({ files: [file], title: name }); } catch { /* 取りやめ */ }
+        } else {
+          alert("この端末では共有できません。「許可書のPDFを開く」を使ってください。");
+        }
+      };
+      actions.append(open, share);
+      box.append(actions);
+    }
+    d.append(box);
+  }
+  if (insurance.length) d.append(el("h3", "doc-title", "第三者賠償責任保険"));
+  for (const i of insurance) {
+    const box = el("div", "rec");
+    const e = expiryState(str(i.valid_to));
+    const head = el("div", "line1");
+    head.append(el("span", "date", str(i.company)));
+    if (e.state === "expired") head.append(el("span", "badge warn", "期限切れ"));
+    box.append(head);
+    kv(box, "証券番号", str(i.policy_number));
+    kv(box, "対人／対物", `${str(i.bodily) || "—"}／${str(i.property) || "—"}`);
+    kv(box, "期間", `${str(i.valid_from)}〜${str(i.valid_to)}`);
+    kv(box, "対象など", str(i.note));
+    d.append(box);
+  }
+  return d;
 }
 
 // ---------- 記録を消されないための対策 ----------

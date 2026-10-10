@@ -37,6 +37,12 @@ await page.setInputFiles("#carry-input", {
 await page.waitForFunction(() => /Macで作成/.test(document.getElementById("carry-info").textContent));
 
 const sections = await page.$$eval("#carry-body .section-title", (n) => n.map((x) => x.textContent));
+// 具備資料（あれば）: 機体の書類・許可書を開くボタン・今日の記録の許可書の行
+const documents = await page.evaluate(() => ({
+  機体の書類: !!document.querySelector("#carry-body .doc-title"),
+  許可書を開く: [...document.querySelectorAll("#carry-body button")].some((b) => b.textContent.includes("許可書のPDFを開く")),
+  今日の許可書: [...document.querySelectorAll("#carry-today .today-row")].map((r) => r.textContent).find((t) => t.startsWith("許可書")) || null,
+}));
 const pills = await page.$$eval("#carry-body .chip", (n) => n.map((x) => x.textContent));
 
 // 点検整備の記録がある機体を選び、このiPhoneで点検を1件記録して併記されるか
@@ -61,7 +67,10 @@ const persisted = await page.evaluate(() => document.getElementById("carry-info"
 
 console.log(JSON.stringify({
   起動時に携行タブ: firstView, ホーム画面追加の案内: warningShown, 機体: pills,
-  表示: sections, 点検追加後: sectionsAfter, ...layout, 開き直し後: persisted, dialogs, problems,
+  表示: sections, 具備資料: documents, 点検追加後: sectionsAfter, ...layout, 開き直し後: persisted, dialogs, problems,
 }, null, 1));
 await browser.close();
-process.exit(problems.length ? 1 : 0);
+// 具備資料を含むファイルなら、表示されていなければ失敗にする
+const expectDocs = !!data.documents && Object.keys(data.documents.aircraft || {}).length > 0;
+const docsOk = !expectDocs || (documents.機体の書類 && documents.許可書を開く && documents.今日の許可書);
+process.exit(problems.length || !docsOk ? 1 : 0);
