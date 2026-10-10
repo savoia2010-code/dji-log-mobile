@@ -34,13 +34,15 @@
 
 <header class="topbar">
   <span class="brand">🛩 飛行日誌</span>
-  <nav>
-    <button class="tab-btn active" data-view="carry">携行</button>
-    <button class="tab-btn" data-view="inspections">点検</button>
-    <button class="tab-btn" data-view="list">記録</button>
-    <button class="tab-btn" data-view="settings">設定</button>
-  </nav>
 </header>
+
+<!-- 片手で届くよう、切り替えは画面の下に置く -->
+<nav class="tabbar">
+  <button class="tab-btn active" data-view="carry"><span class="ico">📒</span>携行</button>
+  <button class="tab-btn" data-view="inspections"><span class="ico">✅</span>点検</button>
+  <button class="tab-btn" data-view="list"><span class="ico">🛩</span>記録</button>
+  <button class="tab-btn" data-view="settings"><span class="ico">⚙️</span>設定</button>
+</nav>
 
 <main>
   <!-- 記録が消されないよう、ホーム画面への追加を促す（carry.js が出し分ける） -->
@@ -55,6 +57,11 @@
 
   <!-- 携行（提示用） -->
   <section id="view-carry">
+    <!-- 現場でいちばん見るものなので先頭に置く（carry.js が描く） -->
+    <div id="carry-today"></div>
+    <!-- 「今日の記録」から飛行記録を読み込むための入力。「記録」タブのボタンと同じく、
+         同じ画面にある入力を label で開く形にする（実機で動いている作りに揃える） -->
+    <input type="file" id="carry-flight-input" accept=".txt" multiple hidden>
     <div class="card">
       <label class="btn primary block">
         Macから受け取る

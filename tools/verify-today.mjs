@@ -27,7 +27,7 @@ page.on("console", (m) => {
 });
 page.on("dialog", (d) => d.accept());
 
-const todayText = () => page.textContent("#carry-body .today");
+const todayText = () => page.textContent("#carry-today .today");
 
 await page.goto(URL, { waitUntil: "networkidle" });
 const empty = await todayText();
@@ -61,6 +61,8 @@ if (logPath.endsWith(".json")) {
 }
 await page.click('.tab-btn[data-view="inspections"]');
 await page.click('.tab-btn[data-view="carry"]');
+// 携行タブの描き直しは非同期なので、取り込んだ飛行が並ぶのを待つ
+await page.waitForSelector("#carry-body >> text=iPhoneのみ", { timeout: 10000 }).catch(() => {});
 const afterFlight = await todayText();
 
 // その機体を選び、iPhoneのみの飛行の総飛行時間を確かめる
@@ -74,10 +76,13 @@ const local = await page.evaluate(async () => {
 });
 
 // 点検を記録すると「記録あり」になるか
-await page.click("#carry-body .today >> text=点検を記録する");
+await page.click("#carry-today .today >> text=点検を記録する");
 await page.click("text=すべて「正常」");
 await page.click("#insp-save");
 await page.click('.tab-btn[data-view="carry"]');
+await page.waitForFunction(() => /記録あり/.test(
+  document.querySelector("#carry-today .today")?.textContent || ""), null, { timeout: 10000 })
+  .catch(() => {});
 const afterInspection = await todayText();
 
 const totalOk = expectTotal ? (local?.total || "").includes(`${expectTotal}（暫定）`) : null;

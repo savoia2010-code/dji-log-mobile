@@ -175,7 +175,7 @@ export async function openInspection(id, presetSerial = "") {
     const title = el("div", "insp-name");
     title.append(el("b", null, name), el("span", "meta", ` ${desc}`));
     item.append(title);
-    const choices = el("div", "checks");
+    const choices = el("div", "seg");
     for (const v of INSPECTION_RESULTS) {
       const l = el("label", "chk");
       const radio = el("input");
@@ -227,6 +227,14 @@ export async function openInspection(id, presetSerial = "") {
     c3.append(del);
   }
   body.append(c3);
+
+  // 9項目を下までたどったあと、上まで戻らずに保存できるようにする
+  const foot = el("div", "sheet-foot");
+  const save2 = el("button", "btn primary block", "保存");
+  save2.type = "button";
+  save2.onclick = saveInspection;
+  foot.append(save2);
+  body.append(foot);
 
   $("#insp-editor").hidden = false;
   body.scrollTop = 0;

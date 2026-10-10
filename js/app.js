@@ -10,7 +10,7 @@ import { bindCarry, protectStorage, renderCarry } from "./carry.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.6.0";
+export const APP_VERSION = "0.7.0";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -74,6 +74,7 @@ async function importFiles(fileList) {
   await refresh();
   await renderCarry(); // 携行タブの「今日の記録」にもすぐ反映する
   setTimeout(() => { status.hidden = true; bar.style.width = "0"; }, 6000);
+  return { added, skipped, failed };
 }
 
 // ---------- 一覧 ----------
@@ -418,6 +419,15 @@ async function exportXlsx() {
 
 function bind() {
   $("#file-input").onchange = (e) => { importFiles(e.target.files); e.target.value = ""; };
+  // 「今日の記録」から読み込んだときは、進み具合の見える「記録」タブで読み込み、
+  // 終わったら携行タブへ戻す。読めなかったものがあれば、理由が見えるよう留まる
+  $("#carry-flight-input").onchange = async (e) => {
+    const files = [...e.target.files];
+    e.target.value = "";
+    document.querySelector('.tab-btn[data-view="list"]').click();
+    const result = await importFiles(files);
+    if (result && !result.failed) document.querySelector('.tab-btn[data-view="carry"]').click();
+  };
 
   for (const b of document.querySelectorAll(".tab-btn")) {
     b.onclick = () => {

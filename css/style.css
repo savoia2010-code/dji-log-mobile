@@ -22,14 +22,26 @@ body {
   padding: max(env(safe-area-inset-top), 8px) 14px 8px;
 }
 .brand { font-weight: 700; }
-.topbar nav { display: flex; gap: 6px; }
-.tab-btn {
-  font: inherit; padding: 5px 14px; border-radius: 999px;
-  border: 1px solid var(--border); background: #fff; color: var(--muted);
+/* 画面下のタブ（片手で届く位置） */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  display: flex; background: #fff; border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
 }
-.tab-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tab-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  font: inherit; font-size: 11px; padding: 7px 0 5px;
+  border: 0; background: none; color: var(--muted);
+}
+.tab-btn .ico { font-size: 21px; line-height: 1.15; filter: grayscale(1); opacity: .7; }
+.tab-btn.active { color: var(--accent); font-weight: 700; }
+.tab-btn.active .ico { filter: none; opacity: 1; }
 
-main { padding: 12px; max-width: 900px; margin: 0 auto; }
+main {
+  padding: 12px; max-width: 900px; margin: 0 auto;
+  /* 下のタブに最後の項目が隠れないよう余白を取る */
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
 
 .card {
   background: var(--card); border: 1px solid var(--border);
@@ -151,7 +163,8 @@ main { padding: 12px; max-width: 900px; margin: 0 auto; }
 .badge.warn { background: #fdeceb; color: var(--warn); }
 
 /* 携行（提示用） */
-.install-warning { border-color: #f0d9a0; background: #fff8e1; }
+.install-warning, .stale-warning { border-color: #f0d9a0; background: #fff8e1; }
+.stale-warning { font-size: 14px; }
 .section > .section-title { font-weight: 600; font-size: 16px; cursor: pointer; }
 .rec { border-top: 1px solid var(--border); padding: 10px 0; }
 .rec > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; cursor: pointer; }
@@ -179,11 +192,32 @@ main { padding: 12px; max-width: 900px; margin: 0 auto; }
     --border: #2c323b; --accent: #5a9cff; --input-bg: #10131a;
   }
   .topbar, .sheet-head { background: var(--card); }
-  .tab-btn, .chip, .btn { background: var(--card); }
+  .chip, .btn { background: var(--card); }
+  .tabbar { background: var(--card); }
   .bar { background: #2c323b; }
   .badge.ok { background: #16311f; }
   .badge.muted { background: #262b33; }
   .badge.manual { background: #322a12; color: #e8c96a; }
   .badge.warn { background: #3a1a18; color: #f2a59f; }
-  .install-warning { background: #2e2814; border-color: #5a4a1c; }
+  .install-warning, .stale-warning { background: #2e2814; border-color: #5a4a1c; }
 }
+
+/* 点検結果の「正常／異常」は、手袋でも押せるよう大きな切り替えボタンにする */
+.seg { display: flex; gap: 8px; }
+.seg .chk {
+  position: relative; flex: 1; justify-content: center; padding: 11px 0;
+  border: 1px solid var(--border); border-radius: 10px; font-size: 15px; background: var(--card);
+}
+.seg .chk input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.seg .chk:has(input:focus-visible) { outline: 2px solid var(--accent); }
+.seg .chk:has(input[value="正常"]:checked) {
+  background: #e6f4ea; border-color: var(--ok); color: var(--ok); font-weight: 700;
+}
+.seg .chk:has(input[value="異常"]:checked) {
+  background: #fdeceb; border-color: var(--warn); color: var(--warn); font-weight: 700;
+}
+@media (prefers-color-scheme: dark) {
+  .seg .chk:has(input[value="正常"]:checked) { background: #16311f; }
+  .seg .chk:has(input[value="異常"]:checked) { background: #3a1a18; color: #f2a59f; }
+}
+.sheet-foot { margin: 4px 0 max(env(safe-area-inset-bottom), 20px); }

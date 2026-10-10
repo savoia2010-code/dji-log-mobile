@@ -299,12 +299,10 @@ function todayCard(aircraft, currentSerial) {
     document.querySelector('.tab-btn[data-view="inspections"]').click();
     openInspection(null, preset);
   };
-  const b2 = el("button", "btn small", "飛行記録を読み込む");
-  // 読み込みの進み具合は「記録」タブに出るので、そちらに切り替えてから選ばせる
-  b2.onclick = () => {
-    document.querySelector('.tab-btn[data-view="list"]').click();
-    document.getElementById("file-input").click();
-  };
+  // ファイル選択をスクリプトから開くと、Safariでは無視されることがある。
+  // 「記録」タブのボタン（実機で動いている）と同じく、同じ画面の入力を label で開く。
+  const b2 = el("label", "btn small", "飛行記録を読み込む");
+  b2.htmlFor = "carry-flight-input";
   actions.append(b1, b2);
   card.append(actions);
   return card;
@@ -323,6 +321,12 @@ export async function renderCarry() {
     info.textContent = `Macで作成: ${fmtStamp(data.generatedAt)}`
       + (age != null ? `（${age === 0 ? "今日" : `${age}日前`}）` : "")
       + ` ／ 受け取り: ${fmtStamp(saved.receivedAt)}`;
+    // 古いまま持ち歩いていると、Macで直した内容や点検整備の記録が抜ける
+    if (age != null && age >= 7) {
+      box.append(el("div", "card stale-warning",
+        `Macから受け取った日誌が${age}日前のものです。Macで記録を更新していれば、`
+        + "「Macから受け取る」で受け取り直してください。"));
+    }
   } else {
     info.textContent = "まだMacから受け取っていません（このiPhoneの記録だけを表示しています）。"
       + ` Mac版を起動すると、iCloud Drive の「${ICLOUD_FOLDER}」→「携行用」に`
@@ -334,7 +338,9 @@ export async function renderCarry() {
     const flewToday = aircraft.find((a) => a.flights.some((f) => f.date === today()));
     selectedSerial = (flewToday || aircraft[0]).serial;
   }
-  box.append(todayCard(aircraft, selectedSerial));
+  const todayBox = $("#carry-today");
+  todayBox.innerHTML = "";
+  todayBox.append(todayCard(aircraft, selectedSerial));
   if (!aircraft.length) {
     box.append(el("div", "empty", "表示できる記録がまだありません。"));
     return;
