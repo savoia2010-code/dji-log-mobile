@@ -116,8 +116,11 @@ export const putCarry = (data) =>
 
 const DEFAULT_SETTINGS = {
   pilotName: "",
+  pilotCertificate: "",        // 技能証明書の番号（あれば様式1に氏名と並べて記載する）
   distanceThresholdM: 8,
   altitudeThresholdM: 0,
+  includeNoGps: false,         // GPSの無い記録も、一定時間以上なら飛行とみなす（Mac版と同じ）
+  noGpsMinMinutes: 2,
 };
 
 export async function getSettings() {
@@ -158,24 +161,34 @@ export async function ensureAircraft(serial, name) {
  * 登録記号・型式はMac版の値で更新する（記録の大元はMac版にあるため）。
  */
 export async function mergeAircraftFromMac(list) {
+  // 登録記号・型式などは、設定の同期（settingsSync）で項目ごとに新しい方へ合わせる。
+  // ここでは機体を一覧に加え、空欄だけを埋める
   for (const a of list) {
     if (!a.serial) continue;
     const existing = await tx("aircraft", "readonly", (s) => s.get(a.serial));
     await putAircraft({
       serial: a.serial,
       name: (existing && existing.name) || a.name || "",
-      registration: a.registration || (existing && existing.registration) || "",
-      model: a.model || (existing && existing.model) || "",
+      registration: (existing && existing.registration) || a.registration || "",
+      model: (existing && existing.model) || a.model || "",
       initialFlightSeconds: (existing && existing.initialFlightSeconds) || 0,
     });
   }
 }
 
-/** 日誌に載せる「飛行」か。累積移動距離で判定し、高度しきい値は任意で併用。 */
-export function isFlight(f, distanceThreshold, altitudeThreshold = 0) {
+/**
+ * 日誌に載せる「飛行」か（Mac版の db.is_flight と同じ判定）。累積移動距離で判定し、
+ * 高度しきい値は任意で併用。GPSの無い記録は、設定していれば飛行時間で判定する。
+ * noGps は { include, minSeconds }（settings から noGpsRule で作る）。
+ */
+export function isFlight(f, distanceThreshold, altitudeThreshold = 0, noGps = null) {
   if (f.manualOverride !== null && f.manualOverride !== undefined) return !!f.manualOverride;
   if ((f.totalDistanceM || 0) >= distanceThreshold) return true;
-  return altitudeThreshold > 0 && (f.maxAltitudeM || 0) >= altitudeThreshold;
+  if (altitudeThreshold > 0 && (f.maxAltitudeM || 0) >= altitudeThreshold) return true;
+  if (noGps && noGps.include && !f.hasGps) return (f.durationSeconds || 0) >= noGps.minSeconds;
+  return false;
 }
+
+export const noGpsRule = (s) => ({ include: !!s.includeNoGps, minSeconds: (Number(s.noGpsMinMinutes) || 0) * 60 });
 
 export const floorMinutes = (sec) => Math.floor((sec || 0) / 60);

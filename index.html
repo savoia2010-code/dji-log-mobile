@@ -151,6 +151,9 @@
       <label class="field">操縦者氏名
         <input type="text" id="pilot-name" placeholder="例: 山田 太郎">
       </label>
+      <label class="field">技能証明書の番号（あれば）
+        <input type="text" id="pilot-cert" placeholder="例: 1234567890">
+      </label>
       <label class="field">飛行判定：累積移動距離（m）
         <input type="number" id="dist-threshold" min="1" step="1">
         <span class="help">実際に飛んだ道のりがこの値以上なら「飛行」と判定します。</span>
@@ -159,6 +162,12 @@
         <input type="number" id="alt-threshold" min="0" step="1">
         <span class="help">GPSが測位できていない飛行は距離が0mになります。値を入れると高度でも判定します。</span>
       </label>
+      <label class="chk field-chk"><input type="checkbox" id="include-no-gps"> GPSの無い記録も、次の時間以上なら飛行とみなす</label>
+      <label class="field">GPSの無い記録を飛行とみなす時間（分）
+        <input type="number" id="no-gps-min" min="0" step="1">
+        <span class="help">屋内やFPVなど、GPSを測位しないで飛ばした記録を日誌に載せたいときに使います。</span>
+      </label>
+      <p class="help">ここの設定と機体の登録記号・型式は、Mac版と自動で揃います（項目ごとに、あとから「保存」で変えた方に合わせます）。</p>
       <button class="btn primary" id="save-settings">保存</button>
     </div>
 

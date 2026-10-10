@@ -23,6 +23,7 @@ import { fmtDate, fmtTime, fmtDuration } from "./export.js";
 import { formatPlace } from "./geocode.js";
 import { inspectionSummary, openInspection, postSummary } from "./inspections.js";
 import { submitSection } from "./submit.js";
+import * as settingsSync from "./settingsSync.js";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -88,26 +89,12 @@ export async function acceptCarry(data) {
   await db.mergeAircraftFromMac(list(data.aircraft).map((a) => ({
     serial: str(a.serial), name: str(a.name), registration: str(a.registration), model: str(a.model),
   })));
-  if (await applyCriteria(obj(data.criteria))) document.dispatchEvent(new Event("criteria-changed"));
+  // Mac版で後から変えた設定（飛行とみなす距離・操縦者・機体の登録記号など）に合わせる
+  const changed = await settingsSync.applyRemote(obj(data.settings));
+  if (changed.length) {
+    document.dispatchEvent(new CustomEvent("settings-synced", { detail: changed }));
+  }
   await renderCarry();
-  return true;
-}
-
-/**
- * Mac版の「飛行とみなす距離・高度」が、このiPhoneで変えたときより新しければ合わせる。
- * 合わせたら true。
- */
-async function applyCriteria(c) {
-  const theirs = Date.parse(str(c.updatedAt));
-  if (Number.isNaN(theirs)) return false;
-  const s = await db.getSettings();
-  const mine = Date.parse(str(s.criteriaUpdatedAt));
-  if (!Number.isNaN(mine) && mine >= theirs) return false;
-  const dist = Number(c.distanceThresholdM);
-  const alt = Number(c.altitudeThresholdM);
-  if (Number.isFinite(dist) && dist >= 0) await db.setSetting("distanceThresholdM", dist);
-  if (Number.isFinite(alt) && alt >= 0) await db.setSetting("altitudeThresholdM", alt);
-  await db.setSetting("criteriaUpdatedAt", str(c.updatedAt));
   return true;
 }
 
@@ -231,7 +218,7 @@ function localFlightRows(localFlights, macFlights, settings, aircraft) {
   const rows = [];
   const mine = localFlights
     .filter((f) => !known.has(f.fileName)
-      && db.isFlight(f, settings.distanceThresholdM, settings.altitudeThresholdM))
+      && db.isFlight(f, settings.distanceThresholdM, settings.altitudeThresholdM, db.noGpsRule(settings)))
     .sort((a, b) => a.takeoffTime.localeCompare(b.takeoffTime));
   for (const f of mine) {
     const date = fmtDate(f.takeoffTime);

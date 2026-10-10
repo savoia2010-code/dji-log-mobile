@@ -261,3 +261,4 @@ main {
 .submit-title { font-weight: 600; font-size: 14.5px; }
 .submit-actions { display: flex; gap: 6px; flex: none; }
 .submit-actions .btn.small { margin-top: 0; }
+.field-chk { white-space: normal; display: flex; margin: 4px 0 12px; }

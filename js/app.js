@@ -8,10 +8,11 @@ import { buildLogbook, fileNameFor, fmtDate, fmtTime, fmtDuration } from "./expo
 import { bindInspections, renderInspections } from "./inspections.js";
 import { bindCarry, isInstalled, protectStorage, renderCarry } from "./carry.js";
 import * as gas from "./gas.js";
+import * as settingsSync from "./settingsSync.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.13.0";
+export const APP_VERSION = "0.14.0";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -119,8 +120,8 @@ function visibleFlights() {
   const { distanceThresholdM: d, altitudeThresholdM: a } = state.settings;
   let list = state.flights;
   if (state.aircraftFilter) list = list.filter((f) => f.aircraftSn === state.aircraftFilter);
-  if (state.show === "flight") return list.filter((f) => db.isFlight(f, d, a));
-  if (state.show === "excluded") return list.filter((f) => !db.isFlight(f, d, a));
+  if (state.show === "flight") return list.filter((f) => db.isFlight(f, d, a, db.noGpsRule(state.settings)));
+  if (state.show === "excluded") return list.filter((f) => !db.isFlight(f, d, a, db.noGpsRule(state.settings)));
   return list;
 }
 
@@ -130,8 +131,8 @@ function render() {
     ? state.flights.filter((f) => f.aircraftSn === state.aircraftFilter)
     : state.flights;
 
-  $('[data-count="flight"]').textContent = scoped.filter((f) => db.isFlight(f, d, a)).length;
-  $('[data-count="excluded"]').textContent = scoped.filter((f) => !db.isFlight(f, d, a)).length;
+  $('[data-count="flight"]').textContent = scoped.filter((f) => db.isFlight(f, d, a, db.noGpsRule(state.settings))).length;
+  $('[data-count="excluded"]').textContent = scoped.filter((f) => !db.isFlight(f, d, a, db.noGpsRule(state.settings))).length;
   $('[data-count="all"]').textContent = scoped.length;
 
   $("#rule-hint").textContent =
@@ -184,7 +185,7 @@ function renderList() {
     const line1 = el("div", "line1");
     line1.append(el("span", "date", fmtDate(f.takeoffTime)));
     line1.append(el("span", "meta", f.aircraftName || f.aircraftSn));
-    const flying = db.isFlight(f, d, a);
+    const flying = db.isFlight(f, d, a, db.noGpsRule(state.settings));
     line1.append(el("span", `badge ${flying ? "ok" : "muted"}`, flying ? "飛行" : "対象外"));
     if (f.manualOverride !== null && f.manualOverride !== undefined) {
       line1.append(el("span", "badge manual", "手動"));
@@ -380,8 +381,11 @@ async function applyBulk(field, values) {
 function renderSettings() {
   const s = state.settings;
   $("#pilot-name").value = s.pilotName || "";
+  $("#pilot-cert").value = s.pilotCertificate || "";
   $("#dist-threshold").value = s.distanceThresholdM;
   $("#alt-threshold").value = s.altitudeThresholdM;
+  $("#include-no-gps").checked = !!s.includeNoGps;
+  $("#no-gps-min").value = s.noGpsMinMinutes;
 
   const box = $("#aircraft-list");
   box.innerHTML = "";
@@ -397,7 +401,10 @@ function renderSettings() {
       const i = el("input");
       i.type = "text"; i.value = ac[key] || ""; if (ph) i.placeholder = ph;
       i.onchange = async () => {
+        // Mac版と揃えるので、変えた項目に時刻を付ける
+        const before = await settingsSync.snapshot();
         await db.putAircraft({ ...ac, [key]: i.value.trim() });
+        if ((await settingsSync.stampChanges(before)).length) autoSync(true);
         await refresh();
       };
       fl.append(i);
@@ -417,7 +424,7 @@ async function exportXlsx() {
   const aircraft = serial ? state.aircraft.filter((a) => a.serial === serial) : state.aircraft;
 
   const target = flights.filter((f) =>
-    db.isFlight(f, state.settings.distanceThresholdM, state.settings.altitudeThresholdM));
+    db.isFlight(f, state.settings.distanceThresholdM, state.settings.altitudeThresholdM, db.noGpsRule(state.settings)));
   if (!target.length) {
     alert("書き出す飛行記録がありません。");
     return;
@@ -495,23 +502,24 @@ function bind() {
   $("#export-btn").onclick = exportXlsx;
 
   $("#save-settings").onclick = async () => {
-    const before = await db.getSettings();
-    const dist = Number($("#dist-threshold").value) || 8;
-    const alt = Number($("#alt-threshold").value) || 0;
+    // Mac版と揃える設定は、保存で値が変わった項目にだけ時刻を付ける（新しい方に合わせるため）
+    const before = await settingsSync.snapshot();
     await db.setSetting("pilotName", $("#pilot-name").value.trim());
-    await db.setSetting("distanceThresholdM", dist);
-    await db.setSetting("altitudeThresholdM", alt);
-    // 飛行とみなす距離・高度は Mac版と揃える。変えた時刻を残し、新しい方に合わせる
-    const changed = dist !== Number(before.distanceThresholdM) || alt !== Number(before.altitudeThresholdM);
-    if (changed) await db.setSetting("criteriaUpdatedAt", new Date().toISOString());
+    await db.setSetting("pilotCertificate", $("#pilot-cert").value.trim());
+    await db.setSetting("distanceThresholdM", Number($("#dist-threshold").value) || 8);
+    await db.setSetting("altitudeThresholdM", Number($("#alt-threshold").value) || 0);
+    await db.setSetting("includeNoGps", $("#include-no-gps").checked);
+    await db.setSetting("noGpsMinMinutes", Math.max(0, Number($("#no-gps-min").value) || 0));
+    const changed = await settingsSync.stampChanges(before);
     await refresh();
-    alert(changed ? "保存しました。Mac版にも同じ判定が届きます（同期したとき）。" : "保存しました。");
-    if (changed) autoSync(true);
+    alert(changed.length ? "保存しました。Mac版にも届きます（同期したとき）。" : "保存しました。");
+    if (changed.length) autoSync(true);
   };
-  // Mac版で変えた判定を受け取ったら、一覧と設定の画面を描き直す
-  document.addEventListener("criteria-changed", async () => {
+  // Mac版で後から変えた設定に合わせたら、知らせて画面を描き直す（知らないうちに変わらないように）
+  document.addEventListener("settings-synced", async (e) => {
     await refresh();
     renderSettings();
+    alert(`Mac版で変えた設定に合わせました：${e.detail.join("、")}`);
   });
 
   $("#regeocode").onclick = async () => {

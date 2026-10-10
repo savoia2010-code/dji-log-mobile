@@ -12,35 +12,12 @@
 
 import { SYNC_FORMAT, SYNC_VERSION } from "./constants.js";
 import * as db from "./db.js";
+import * as settingsSync from "./settingsSync.js";
 
 const PREFIX = "DJILOG1:";
 const SCRIPT_URL = /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/;
 const MIN_INTERVAL_MS = 60 * 1000;   // 画面の切り替えのたびに呼ばないよう間隔を空ける
 const BACKUP_FORMAT = "dji-log-mobile-backup";
-// バックアップに入れる設定（利用者が決めるもの）。同期の合言葉などは入れない
-const BACKUP_SETTING_KEYS = ["pilotName", "distanceThresholdM", "altitudeThresholdM", "criteriaUpdatedAt"];
-const AIRCRAFT_FIELDS = ["name", "registration", "model", "initialFlightSeconds"];
-// 飛行とみなす距離・高度は、変えた時刻（criteriaUpdatedAt）が新しい方を採る
-const CRITERIA_KEYS = ["distanceThresholdM", "altitudeThresholdM", "criteriaUpdatedAt"];
-const timeOf = (v) => { const t = Date.parse(String(v || "")); return Number.isNaN(t) ? -Infinity : t; };
-
-/** バックアップの設定と手元の設定を合わせる。判定の設定は新しく変えた方を採る。 */
-function mergeSettings(remote, local) {
-  const r = remote && typeof remote === "object" ? remote : {};
-  const out = { ...r, ...local };
-  if (timeOf(r.criteriaUpdatedAt) > timeOf(local.criteriaUpdatedAt)) {
-    for (const k of CRITERIA_KEYS) if (k in r) out[k] = r[k];
-  }
-  return out;
-}
-
-async function backupSettings() {
-  const stored = await db.getStoredSettings();
-  return Object.fromEntries(BACKUP_SETTING_KEYS.filter((k) => k in stored).map((k) => [k, stored[k]]));
-}
-
-const filled = (v) => v !== undefined && v !== null && v !== "" && v !== 0;
-
 let running = null;
 let lastRun = 0;
 
@@ -226,10 +203,9 @@ export async function syncNow({ force = false } = {}) {
         inspections: await db.getAllInspections(),
         flights: await db.getAllFlights(),
         carryGeneratedAt: carryNow ? String(carryNow.data.generatedAt || "") : "",
-        // 設定（飛行とみなす距離など）と機体（登録記号など）も残す。入れ直したときに
-        // 初期値に戻ってしまわないように
-        settings: await backupSettings(),
-        aircraft: await db.getAllAircraft(),
+        // Mac版と揃える設定（飛行とみなす距離・操縦者・機体の登録記号など）も、変えた時刻と
+        // 一緒に残す。入れ直したときに初期値に戻らないように。Mac版もこれを見て合わせる
+        sync: await settingsSync.forBackup(),
       };
       const digest = await digestOf(local);
       if (digest !== (await db.getSettings()).gasBackupDigest) {
@@ -274,18 +250,8 @@ export async function syncNow({ force = false } = {}) {
  * バックアップを合わせる。点検は識別子ごとに新しい方、飛行は記録ファイル名ごと。
  * 合わせるだけなので、バックアップの記録が減ることはない。
  */
-export function mergeBackup(remote, inspections, flights, { settings = {}, aircraft = [] } = {}) {
+export function mergeBackup(remote, inspections, flights, { sync = {} } = {}) {
   const old = remote && remote.format === BACKUP_FORMAT ? remote : { inspections: [], flights: [] };
-  // 機体は項目ごとに、手元で入っている値を優先する（入れ直したばかりのiPhoneの空欄で、
-  // バックアップの登録記号を消さないように）
-  const ac = new Map();
-  for (const a of [...(Array.isArray(old.aircraft) ? old.aircraft : []), ...aircraft]) {
-    if (!a || !a.serial) continue;
-    const cur = ac.get(a.serial) || { serial: a.serial };
-    const next = { ...cur };
-    for (const k of AIRCRAFT_FIELDS) if (filled(a[k])) next[k] = a[k];
-    ac.set(a.serial, next);
-  }
   const insp = new Map();
   for (const r of [...(old.inspections || []), ...inspections]) {
     if (!r || !r.id) continue;
@@ -299,8 +265,8 @@ export function mergeBackup(remote, inspections, flights, { settings = {}, aircr
   return {
     format: BACKUP_FORMAT, version: 1, savedAt: new Date().toISOString(),
     inspections: [...insp.values()], flights: [...fl.values()],
-    settings: mergeSettings(old.settings, settings),
-    aircraft: [...ac.values()],
+    // 設定は項目ごとに新しく変えた方（入れ直したばかりのiPhoneの初期値で上書きしない）
+    sync: settingsSync.merge(old.sync, sync),
   };
 }
 
@@ -330,32 +296,8 @@ export async function restoreFromBackup() {
   await db.putFlights(flights);
   for (const f of flights) await db.ensureAircraft(f.aircraftSn, f.aircraftName);
 
-  // 設定は、このiPhoneでまだ決めていないものだけを戻す（手元で決め直したものは残す）
-  const stored = await db.getStoredSettings();
-  const settings = backup.settings && typeof backup.settings === "object" ? backup.settings : {};
-  // 飛行とみなす距離・高度は、変えた時刻が新しい方を採る（Mac版から先に届いた値より、
-  // このiPhoneで後から変えた値を優先する）
-  let restoredSettings = 0;
-  const criteriaNewer = timeOf(settings.criteriaUpdatedAt) > timeOf(stored.criteriaUpdatedAt);
-  for (const k of BACKUP_SETTING_KEYS) {
-    if (!(k in settings)) continue;
-    const take = CRITERIA_KEYS.includes(k) && "criteriaUpdatedAt" in settings ? criteriaNewer : !(k in stored);
-    if (take) {
-      await db.setSetting(k, settings[k]);
-      restoredSettings++;
-    }
-  }
-  // 機体は、手元で空欄の項目だけを埋める
-  const localAc = new Map((await db.getAllAircraft()).map((a) => [a.serial, a]));
-  for (const a of Array.isArray(backup.aircraft) ? backup.aircraft : []) {
-    if (!a || !a.serial) continue;
-    const cur = localAc.get(a.serial) || {
-      serial: a.serial, name: "", registration: "", model: "", initialFlightSeconds: 0,
-    };
-    const next = { ...cur };
-    for (const k of AIRCRAFT_FIELDS) if (!filled(cur[k]) && filled(a[k])) next[k] = a[k];
-    await db.putAircraft(next);
-  }
+  // 設定は、このiPhoneより後に変えたもの（と、このiPhoneでまだ決めていないもの）を戻す
+  const restoredSettings = (await settingsSync.applyRemote(backup.sync)).length;
   return { inspections: insp.length, flights: flights.length, settings: restoredSettings,
            savedAt: backup.savedAt };
 }

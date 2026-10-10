@@ -2,7 +2,7 @@
 // SheetJS(vendor/xlsx.mini.min.js) を使い、機体ごとにシートを分ける。
 
 import { display } from "./constants.js";
-import { isFlight, floorMinutes } from "./db.js";
+import { isFlight, floorMinutes, noGpsRule } from "./db.js";
 import { formatPlace } from "./geocode.js";
 
 const HEADERS = [
@@ -39,7 +39,7 @@ export function buildLogbook(flights, aircraftList, settings) {
   const aircraftBySerial = Object.fromEntries((aircraftList || []).map((a) => [a.serial, a]));
 
   const target = flights
-    .filter((f) => isFlight(f, dist, alt))
+    .filter((f) => isFlight(f, dist, alt, noGpsRule(settings)))
     .sort((a, b) => a.takeoffTime.localeCompare(b.takeoffTime));
 
   // 機体ごとに分ける（飛行日誌は機体ごとに備えるため）
