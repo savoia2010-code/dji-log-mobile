@@ -11,7 +11,7 @@ import * as gas from "./gas.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.9.0";
+export const APP_VERSION = "0.9.1";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {

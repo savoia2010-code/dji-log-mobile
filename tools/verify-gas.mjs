@@ -80,7 +80,8 @@ const deleted = await page.evaluate(() => new Promise((res) => {
 if (!deleted) problems.push("検証の準備: 保存先を消せませんでした");
 await page.goto(URL, { waitUntil: "networkidle" });
 await page.click('.tab-btn[data-view="settings"]');
-await page.fill("#gas-code", setupCode);
+// 貼り付けで先頭が小文字になったり、改行が混ざったりしても受け付ける（実機で起きた）
+await page.fill("#gas-code", ` ${setupCode.replace("DJILOG1:", "djilog1:")}\n`);
 await page.click("#gas-save");
 await page.waitForFunction(() => !document.getElementById("gas-set").hidden);
 const before = dialogs.length;

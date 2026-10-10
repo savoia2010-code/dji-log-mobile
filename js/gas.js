@@ -25,8 +25,10 @@ export class GasError extends Error {}
 
 /** Mac版の「設定コード」を読み取る。 */
 export function parseSetupCode(code) {
-  const text = String(code || "").trim();
-  if (!text.startsWith(PREFIX)) throw new GasError("設定コードの形式が違います（DJILOG1: で始まる1行を貼ってください）");
+  // 貼り付けたときに、iPhoneが先頭を小文字にしたり、改行や空白が混ざったりすることがある。
+  // 先頭の目印は大文字・小文字を区別しない（後ろの本体は区別するので、そのまま使う）
+  const text = String(code || "").replace(/[\s\u200b\ufeff]/g, "");
+  if (text.slice(0, PREFIX.length).toUpperCase() !== PREFIX) throw new GasError("設定コードの形式が違います（DJILOG1: で始まる1行を貼ってください）");
   let conf;
   try {
     const b64 = text.slice(PREFIX.length).replace(/-/g, "+").replace(/_/g, "/");
