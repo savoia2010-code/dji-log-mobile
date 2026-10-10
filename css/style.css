@@ -254,3 +254,10 @@ main {
 #insp-list .row .line1 + .line1 { margin-top: 6px; }
 #insp-list .post-ok { width: 100%; margin: 4px 0 0; }
 .sheet-foot { margin: 4px 0 max(env(safe-area-inset-bottom), 20px); }
+
+/* 提出・提示用の出力 */
+.submit-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
+.submit-text { flex: 1; min-width: 0; }
+.submit-title { font-weight: 600; font-size: 14.5px; }
+.submit-actions { display: flex; gap: 6px; flex: none; }
+.submit-actions .btn.small { margin-top: 0; }

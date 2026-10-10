@@ -22,6 +22,7 @@ import * as db from "./db.js";
 import { fmtDate, fmtTime, fmtDuration } from "./export.js";
 import { formatPlace } from "./geocode.js";
 import { inspectionSummary, openInspection, postSummary } from "./inspections.js";
+import { submitSection } from "./submit.js";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -451,6 +452,8 @@ export async function renderCarry() {
 
   const documents = saved && saved.data.documents;
   const doc = documents && obj(documents.aircraft)[ac.serial];
+  // 提示・提出を求められたときに、すぐ出せるよう上の方に置く
+  box.append(submitSection(ac, documents));
   box.append(documentsSection(documents, doc));
   box.append(permitsSection(documents));
 

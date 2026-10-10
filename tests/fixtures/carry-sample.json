@@ -153,7 +153,9 @@
     "photos": {
      "front": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
     },
-    "updated_at": "2026-07-01T09:00:00+09:00"
+    "updated_at": "2026-07-01T09:00:00+09:00",
+    "pdf": "JVBERi0xLjQKJSB0ZXN0IGRvY3VtZW50Cg==",
+    "pdf_name": "具備資料_TEST.pdf"
    }
   },
   "permits": [
@@ -175,6 +177,17 @@
     "valid_from": "2026-04-01",
     "valid_to": "2099-03-31",
     "note": ""
+   }
+  ],
+  "others": [
+   {
+    "kind": "技能証明書",
+    "title": "二等無人航空機操縦士 技能証明書（見本）",
+    "valid_to": "2029-03-31",
+    "note": "",
+    "file_name": "license.pdf",
+    "mime": "application/pdf",
+    "data": "JVBERi0xLjQKJSB0ZXN0IGRvY3VtZW50Cg=="
    }
   ]
  }

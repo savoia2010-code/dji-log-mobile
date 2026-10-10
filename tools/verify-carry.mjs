@@ -17,6 +17,15 @@ if (!carryPath) { console.error("携行用ファイルを指定してくださ�
 const browser = await webkit.launch();
 const context = await browser.newContext({ ...devices["iPhone 15"] });
 const page = await context.newPage();
+// 共有シートは出せないので、渡されたファイルを受け取って中身を確かめる
+await page.addInitScript(() => {
+  window.__shared = [];
+  navigator.canShare = () => true;
+  navigator.share = async ({ files }) => {
+    const f = files[0];
+    window.__shared.push({ name: f.name, type: f.type, bytes: Array.from(new Uint8Array(await f.arrayBuffer())) });
+  };
+});
 const problems = [];
 const isHarnessNoise = (t) => t.includes("Refused to apply a stylesheet");
 page.on("pageerror", (e) => problems.push(`実行時エラー: ${e}`));
@@ -62,15 +71,41 @@ const layout = await page.evaluate(() => ({
 }));
 if (shotPath) await page.screenshot({ path: shotPath, fullPage: true });
 
+// 提出・提示: 飛行日誌（様式1・2・3）のExcelを送ると、このiPhoneで記録した点検も入っている
+await page.click("#submit-logbook");
+await page.waitForFunction(() => window.__shared.length >= 1);
+const logbook = await page.evaluate(() => {
+  const f = window.__shared[0];
+  const wb = window.XLSX.read(new Uint8Array(f.bytes), { type: "array" });
+  const rows = (name) => window.XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1 });
+  return { name: f.name, sheets: wb.SheetNames, 点検の行: rows("様式2 日常点検記録").length,
+           整備の行: rows("様式3 点検整備記録").length, 飛行の行: rows("様式1 飛行記録").length };
+});
+const submitRows = await page.$$eval("#carry-body .submit .submit-title", (n) => n.map((x) => x.textContent));
+// そのほかの書類（技能証明書など）も送れる
+const sendButtons = await page.$$("#carry-body .submit .submit-row .btn.primary");
+if (sendButtons.length) await sendButtons[sendButtons.length - 1].click();
+await page.waitForFunction(() => window.__shared.length >= 2, null, { timeout: 5000 }).catch(() => {});
+const lastShared = await page.evaluate(() => {
+  const f = window.__shared[window.__shared.length - 1];
+  return f && { name: f.name, type: f.type, head: String.fromCharCode(...f.bytes.slice(0, 5)) };
+});
+
 await page.reload({ waitUntil: "networkidle" });
 const persisted = await page.evaluate(() => document.getElementById("carry-info").textContent);
 
 console.log(JSON.stringify({
   起動時に携行タブ: firstView, ホーム画面追加の案内: warningShown, 機体: pills,
-  表示: sections, 具備資料: documents, 点検追加後: sectionsAfter, ...layout, 開き直し後: persisted, dialogs, problems,
+  表示: sections, 具備資料: documents, 点検追加後: sectionsAfter, ...layout, 開き直し後: persisted,
+  提出: { 日誌: logbook, 並び: submitRows, 最後に送ったもの: lastShared }, dialogs, problems,
 }, null, 1));
 await browser.close();
 // 具備資料を含むファイルなら、表示されていなければ失敗にする
 const expectDocs = !!data.documents && Object.keys(data.documents.aircraft || {}).length > 0;
 const docsOk = !expectDocs || (documents.機体の書類 && documents.許可書を開く && documents.今日の許可書);
-process.exit(problems.length || !docsOk ? 1 : 0);
+// 日誌のExcelは3様式。このiPhoneで記録した点検が様式2に入る（見出しまでで5〜6行あるので、それより多い）
+const t = target;
+const submitOk = logbook.sheets.length === 3 && logbook.点検の行 > 6
+  && (!t.maintenance.length || logbook.整備の行 > 6)
+  && (!expectDocs || (submitRows.some((x) => x.startsWith("具備資料")) && lastShared && lastShared.head === "%PDF-"));
+process.exit(problems.length || !docsOk || !submitOk ? 1 : 0);
