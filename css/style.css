@@ -166,6 +166,12 @@ main { padding: 12px; max-width: 900px; margin: 0 auto; }
 .items .muted { color: var(--muted); }
 .item-remark { color: var(--muted); font-size: 13px; padding: 2px 0 2px 8px; }
 .warn-text { color: var(--warn); }
+.today-row { display: flex; gap: 12px; font-size: 15px; padding: 4px 0; }
+.today-row .label { color: var(--muted); min-width: 5.5em; }
+.today-row .okt { color: var(--ok); font-weight: 600; }
+.today-row .ng { color: var(--warn); font-weight: 700; }
+.today-row .muted { color: var(--muted); }
+.today-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 @media (prefers-color-scheme: dark) {
   :root {

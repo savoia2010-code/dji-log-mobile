@@ -72,6 +72,7 @@ async function importFiles(fileList) {
   text.textContent = msg + (errors.length ? `\n${errors.join("\n")}` : "");
 
   await refresh();
+  await renderCarry(); // 携行タブの「今日の記録」にもすぐ反映する
   setTimeout(() => { status.hidden = true; bar.style.width = "0"; }, 6000);
 }
 

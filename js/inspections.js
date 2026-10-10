@@ -84,14 +84,15 @@ export async function renderInspections() {
 
 // ---------- 入力 ----------
 
-async function openInspection(id) {
+export async function openInspection(id, presetSerial = "") {
   const settings = await db.getSettings();
   const aircraft = await db.getAllAircraft();
   let r = id ? await db.getInspection(id) : null;
   const isNew = !r;
   if (!r) {
-    // 機体は前回点検した機体を初期値にする（同じ機体を続けて使うことが多い）
-    const last = aircraft.find((a) => a.serial === settings.lastInspectionAircraft);
+    // 機体は、呼び出し元の指定（今日飛ばした機体など）か、前回点検した機体を初期値にする
+    const last = aircraft.find((a) => a.serial === presetSerial)
+      || aircraft.find((a) => a.serial === settings.lastInspectionAircraft);
     r = {
       id: crypto.randomUUID(),
       aircraftSerial: last ? last.serial : "",
