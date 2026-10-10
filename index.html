@@ -12,7 +12,8 @@
   script-src 'self' 'wasm-unsafe-eval';
   style-src 'self';
   img-src 'self' data:;
-  connect-src 'self' https://mreversegeocoder.gsi.go.jp https://habs.rad.naro.go.jp;
+  connect-src 'self' https://mreversegeocoder.gsi.go.jp https://habs.rad.naro.go.jp
+    https://script.google.com https://script.googleusercontent.com;
   object-src 'none';
   base-uri 'self';
   form-action 'none'">
@@ -159,6 +160,28 @@
         <span class="help">GPSが測位できていない飛行は距離が0mになります。値を入れると高度でも判定します。</span>
       </label>
       <button class="btn primary" id="save-settings">保存</button>
+    </div>
+
+    <div class="card" id="gas-card">
+      <h2>Googleドライブ同期</h2>
+      <p class="help" style="margin-top:0">
+        Mac版の「設定」→「Googleドライブ同期」で作った<b>設定コード</b>を貼ると、
+        点検の送信・Macの日誌の受け取り・このiPhoneのバックアップを自動で行います
+        （アプリを開いたとき・点検を保存したとき・電波が戻ったとき）。
+        送り先はあなたのGoogleドライブだけです。
+      </p>
+      <div id="gas-unset">
+        <label class="field">設定コード
+          <input type="text" id="gas-code" placeholder="DJILOG1:…" autocomplete="off" autocapitalize="off" spellcheck="false">
+        </label>
+        <button class="btn primary" id="gas-save">設定する</button>
+      </div>
+      <div id="gas-set" hidden>
+        <p class="status-text" id="gas-status"></p>
+        <button class="btn" id="gas-sync">今すぐ同期</button>
+        <button class="btn" id="gas-restore">Googleドライブから戻す</button>
+        <button class="btn danger" id="gas-clear">設定を消す</button>
+      </div>
     </div>
 
     <div class="card">

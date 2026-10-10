@@ -307,6 +307,8 @@ async function saveInspection() {
   await db.putInspection(r);
   closeInspection();
   await renderInspections();
+  // Googleドライブ同期を設定していれば、すぐ送る（app.js が受け取る）
+  document.dispatchEvent(new Event("inspection-saved"));
 }
 
 // ---------- Macへ送る ----------

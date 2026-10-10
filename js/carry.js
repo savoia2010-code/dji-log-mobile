@@ -73,12 +73,22 @@ async function receive(file) {
   const prev = await db.getCarry();
   if (prev && prev.data.generatedAt > data.generatedAt
       && !confirm("いま保存している日誌より古いファイルです。古い方で置き換えますか？")) return;
+  await acceptCarry(data);
+  alert(`受け取りました（Macで ${fmtStamp(data.generatedAt)} に作成）。`);
+}
+
+/**
+ * 携行用の日誌を保存する（ファイルで受け取ったときと、Googleドライブから
+ * 自動で受け取ったときの共通の入口）。形式が違えば false を返して何もしない。
+ */
+export async function acceptCarry(data) {
+  if (!data || data.format !== CARRY_FORMAT || data.version !== CARRY_VERSION) return false;
   await db.putCarry(data);
   await db.mergeAircraftFromMac(list(data.aircraft).map((a) => ({
     serial: str(a.serial), name: str(a.name), registration: str(a.registration), model: str(a.model),
   })));
   await renderCarry();
-  alert(`受け取りました（Macで ${fmtStamp(data.generatedAt)} に作成）。`);
+  return true;
 }
 
 // ---------- 表示 ----------

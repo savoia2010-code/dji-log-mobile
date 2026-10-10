@@ -5,7 +5,7 @@
 // 使うのは tests/fixtures/ の架空のデータだけで、実際の飛行記録は要らない。
 
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,6 +34,23 @@ const checks = [
     fx("flight-sample.json"), "2026-07-14T15:10:00+09:00", "1:16"]],
 ];
 
+// Googleドライブ同期の検証は、Mac版の検証用GASサーバー（Code.gs を手元で動かすもの）を使う。
+// Mac版が隣のフォルダに無ければ飛ばす。
+const mockGas = join(root, "..", "dji-log", "gas", "mock-server.mjs");
+let gasServer = null;
+if (existsSync(mockGas)) {
+  const gasPort = port + 1;
+  gasServer = spawn("node", [mockGas, String(gasPort), "test-token"], { stdio: "ignore" });
+  process.on("exit", () => gasServer.kill());
+  for (let i = 0; i < 50; i++) {
+    try { await fetch(`http://localhost:${gasPort}/__drive`); break; } catch { /* 起動待ち */ }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  checks.push(["Googleドライブ同期（GAS）", ["tools/verify-gas.mjs", `http://localhost:${gasPort}`, "test-token"]]);
+} else {
+  console.log("（Mac版が見つからないため、Googleドライブ同期の検証は飛ばします）");
+}
+
 let failed = 0;
 for (const [label, args] of checks) {
   const r = spawnSync("node", args, { cwd: root, env: { ...process.env, APP_URL: url },
@@ -44,5 +61,6 @@ for (const [label, args] of checks) {
   if (!ok) console.log((r.stdout || "") + (r.stderr || ""));
 }
 stop();
+if (gasServer) gasServer.kill();
 console.log(failed ? `\n${failed} 件失敗しました` : "\nすべて通りました");
 process.exit(failed ? 1 : 0);

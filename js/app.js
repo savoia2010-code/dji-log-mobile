@@ -7,10 +7,11 @@ import { reverseGeocode, formatPlace } from "./geocode.js";
 import { buildLogbook, fileNameFor, fmtDate, fmtTime, fmtDuration } from "./export.js";
 import { bindInspections, renderInspections } from "./inspections.js";
 import { bindCarry, protectStorage, renderCarry } from "./carry.js";
+import * as gas from "./gas.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.8.0";
+export const APP_VERSION = "0.9.0";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -437,7 +438,7 @@ function bind() {
       $("#view-list").hidden = v !== "list";
       $("#view-inspections").hidden = v !== "inspections";
       $("#view-settings").hidden = v !== "settings";
-      if (v === "settings") renderSettings();
+      if (v === "settings") { renderSettings(); renderGas(); }
       if (v === "inspections") renderInspections();
       if (v === "carry") renderCarry();
     };
@@ -460,6 +461,7 @@ function bind() {
 
   bindInspections();
   bindCarry();
+  bindGas();
 
   $("#editor-close").onclick = () => { $("#editor").hidden = true; state.editing = null; };
   $("#editor-save").onclick = saveEditor;
@@ -507,6 +509,68 @@ function bind() {
   };
 }
 
+// ---------- Googleドライブ同期 ----------
+
+async function renderGas() {
+  const conf = await gas.getConfig();
+  $("#gas-unset").hidden = !!conf;
+  $("#gas-set").hidden = !conf;
+  if (!conf) return;
+  const st = (await db.getSettings()).gasStatus;
+  const when = st ? new Date(st.time).toLocaleString("ja-JP") : "";
+  $("#gas-status").textContent = st ? `${when}：${st.message}` : "まだ同期していません";
+  $("#gas-status").classList.toggle("warn-text", !!st && !st.ok);
+}
+
+async function autoSync(force = false) {
+  if (!navigator.onLine) return;
+  const status = await gas.syncNow({ force });
+  if (status) {
+    await renderGas();
+    await renderInspections();
+  }
+}
+
+function bindGas() {
+  $("#gas-save").onclick = async () => {
+    try {
+      await gas.saveConfig($("#gas-code").value);
+    } catch (e) {
+      alert(e.message);
+      return;
+    }
+    $("#gas-code").value = "";
+    await renderGas();
+    await autoSync(true);
+    const st = (await db.getSettings()).gasStatus;
+    alert(st && st.ok ? `設定しました。${st.message}` : `設定しましたが、同期できませんでした。\n${st ? st.message : ""}`);
+  };
+  $("#gas-sync").onclick = () => autoSync(true);
+  $("#gas-restore").onclick = async () => {
+    if (!confirm("Googleドライブのバックアップから、このiPhoneに無い記録を戻します。よろしいですか？")) return;
+    try {
+      const r = await gas.restoreFromBackup();
+      await refresh();
+      await renderCarry();
+      alert(`戻しました（点検 ${r.inspections}件・飛行 ${r.flights}件）。`);
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+  $("#gas-clear").onclick = async () => {
+    if (!confirm("Googleドライブ同期の設定を消します（Googleドライブの中身は消えません）。よろしいですか？")) return;
+    await gas.clearConfig();
+    await renderGas();
+  };
+  // 電波が戻ったとき・アプリに戻ってきたときにも同期する
+  window.addEventListener("online", () => autoSync());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") autoSync();
+  });
+  // 点検を保存したら、すぐ送る（送り忘れを無くすため）
+  document.addEventListener("inspection-saved", () => autoSync(true));
+}
+
 function showFatal(message, detail) {
   const box = el("div", "card");
   box.append(el("h2", null, message));
@@ -536,6 +600,7 @@ async function start() {
   try {
     await renderCarry();
     await protectStorage();
+    autoSync();
   } catch (e) {
     showFatal("携行用の日誌を表示できませんでした", String(e && e.message || e));
   }
