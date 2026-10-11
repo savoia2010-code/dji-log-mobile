@@ -109,6 +109,21 @@ const inbox = (await callMock("listInbox")).items || [];
 const sentRecords = inbox.flatMap((i) => JSON.parse(i.content).inspections || []);
 const backup = (await callMock("getBackup")).backup;
 
+// 同じ機体の登録記号と型式を続けて直しても、先に直した登録記号が戻らない
+await page.click('.tab-btn[data-view="settings"]');
+const acInputs = page.locator("#aircraft-list .aircraft-item").first().locator("input");
+await acInputs.nth(0).fill("JU0000000077");
+await acInputs.nth(0).dispatchEvent("change");
+await page.waitForTimeout(300);
+await acInputs.nth(1).fill("見本型式");
+await acInputs.nth(1).dispatchEvent("change");
+await page.waitForTimeout(300);
+const twoEdits = await page.evaluate(async () => {
+  const db = await import("./js/db.js");
+  const a = (await db.getAllAircraft()).find((x) => x.serial === "SN-TEST-0001");
+  return [a.registration, a.model];
+});
+
 // Macで変えた設定（飛行とみなす距離・操縦者）が、携行用の日誌と一緒に届いて合わさり、知らせが出る
 const macAt = new Date().toISOString();
 const carry2 = { ...carry, generatedAt: new Date(Date.now() + 1000).toISOString(),
@@ -197,6 +212,7 @@ const result = {
   送られた点検: sentRecords.length, バックアップの点検: backup ? backup.inspections.length : 0,
   戻したあと: restored.includes("全項目 正常"), 合言葉違い: wrongStatus,
   読み込み直しで原本を送った: resentOld,
+  機体の欄を続けて直す: twoEdits,
   Macの判定が届いた: fromMac, Macの操縦者が届いた: pilotFromMac, 合わせた知らせ: syncNotice,
   バックアップの距離: backedUpSettings.distanceThresholdM, バックアップの高度: backedUpSettings.altitudeThresholdM,
   戻した設定: restoredSettings,
@@ -210,7 +226,8 @@ const result = {
 console.log(JSON.stringify(result, null, 1));
 await browser.close();
 const ok = result.日誌の受信 && result.送られた点検 === 1 && result.バックアップの点検 === 1
-  && result.戻したあと && result.空のときに戻すか聞いた && restoredSettings.距離 === 5 && fromMac === "6"
+  && result.戻したあと && result.空のときに戻すか聞いた && restoredSettings.距離 === 5
+  && twoEdits[0] === "JU0000000077" && twoEdits[1] === "見本型式" && fromMac === "6"
   && pilotFromMac === "見本 一郎" && syncNotice
   && backedUpSettings.distanceThresholdM.value === 5 && !!backedUpSettings.distanceThresholdM.at
   && backedUpSettings.altitudeThresholdM.at === ""

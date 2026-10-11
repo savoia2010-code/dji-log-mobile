@@ -56,7 +56,21 @@
      "engineer": "見本 太郎",
      "remarks": ""
     }
-   ]
+   ],
+   "overview": {
+    "registration": "JU0000000000",
+    "model": "DJI Neo",
+    "manufacturer": "見本製造株式会社",
+    "serial": "SN-TEST-0001",
+    "type_cert_number": "",
+    "airworthiness": "第二種機体認証　TEST-1"
+   },
+   "known_files": [
+    "DJIFlightRecord_2026-07-13_[10-00-00].txt",
+    "DJIFlightRecord_2026-07-14_[10-00-00].txt",
+    "DJIFlightRecord_2026-07-01_[09-00-00].txt"
+   ],
+   "pending_files": []
   }
  ],
  "documents": {

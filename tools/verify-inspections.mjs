@@ -39,6 +39,9 @@ page.on("console", (m) => {
 page.on("dialog", (d) => d.accept());
 
 await page.goto(URL, { waitUntil: "networkidle" });
+// まだ決めていない設定（初期値のまま）はバックアップに入れない（入れ直したiPhoneの初期値で、
+// バックアップの値を上書きしないように）
+const backupKeys = await page.evaluate(async () => Object.keys(await (await import("./js/settingsSync.js")).forBackup()));
 await page.click('.tab-btn[data-view="inspections"]');
 await page.click("#insp-new");
 
@@ -97,11 +100,11 @@ const result = {
   place, before, sendLabel, fileName, after, persisted: persisted.includes("DJI Neo"),
   飛行後の前: beforePost.includes("飛行後：未記録"), 飛行後の記録: afterPost.includes("飛行後：全項目 正常"),
   送り直し: resend, 送った飛行後点検: Object.keys(sentPost || {}).length,
-  開いたときの点検: openedPhase, 飛行後が見える: postVisible, 飛行前の異常が残る: preAbnormal,
+  開いたときの点検: openedPhase, 初期値のままの設定を入れない: !backupKeys.includes("distanceThresholdM"), 飛行後が見える: postVisible, 飛行前の異常が残る: preAbnormal,
   problems,
 };
 console.log(JSON.stringify(result, null, 1));
 await browser.close();
 const ok = !problems.length && result.persisted && result.飛行後の前 && result.飛行後の記録
-  && resend && result.送った飛行後点検 === 9 && openedPhase === "post" && postVisible && preAbnormal;
+  && resend && result.送った飛行後点検 === 9 && openedPhase === "post" && !backupKeys.includes("distanceThresholdM") && postVisible && preAbnormal;
 process.exit(ok ? 0 : 1);

@@ -25,6 +25,15 @@ const LABELS = {
 };
 const AIRCRAFT_FIELDS = ["registration", "model", "initialFlightSeconds"];
 
+// syncAt（項目ごとの時刻）を読み書きする処理を1つずつ順に行う（受け取りと保存が重なっても
+// 時刻を取りこぼさないように）
+let queue = Promise.resolve();
+const serial = (fn) => {
+  const run = queue.then(fn, fn);
+  queue = run.catch(() => {});
+  return run;
+};
+
 const timeOf = (v) => { const t = Date.parse(String(v || "")); return Number.isNaN(t) ? null : t; };
 const norm = (v) => JSON.stringify(v, v && typeof v === "object" ? Object.keys(v).sort() : undefined);
 const blank = (v) => (v && typeof v === "object" ? !Object.values(v).some(Boolean) : v === "" || v === 0 || v == null);
@@ -61,7 +70,11 @@ export async function stamps() {
 }
 
 /** 保存の前後で変わった項目に、今の時刻を付ける。変わった項目を返す。 */
-export async function stampChanges(before) {
+export function stampChanges(before) {
+  return serial(() => stampChangesNow(before));
+}
+
+async function stampChangesNow(before) {
   const after = await snapshot();
   const at = new Date().toISOString();
   const st = { ...(await stamps()) };
@@ -71,11 +84,18 @@ export async function stampChanges(before) {
   return changed;
 }
 
-/** バックアップに入れる設定（値と、最後に変えた時刻）。 */
+/**
+ * バックアップに入れる設定（値と、最後に変えた時刻）。まだ決めていない設定（初期値のまま）は
+ * 入れない（入れ直したばかりのiPhoneの初期値で、バックアップの値を上書きしないように）。
+ */
 export async function forBackup() {
   const st = await stamps();
   const snap = await snapshot();
-  return Object.fromEntries(Object.entries(snap).map(([k, v]) => [k, { value: v, at: st[k] || "" }]));
+  const stored = await db.getStoredSettings();
+  const decided = (k) => k.startsWith("aircraft:") || k in st
+    || (k === "defaultPilot" ? "pilotName" in stored : k in stored);
+  return Object.fromEntries(Object.entries(snap).filter(([k]) => decided(k))
+    .map(([k, v]) => [k, { value: v, at: st[k] || "" }]));
 }
 
 /** バックアップの設定どうしを合わせる。項目ごとに新しい方、時刻が無ければ空欄でない方。 */
@@ -127,7 +147,11 @@ async function set(key, value) {
  * 相手側（Mac版・バックアップ）で後から変えた項目を、相手の値に合わせる。
  * 合わせた項目の名前を返す。
  */
-export async function applyRemote(remote) {
+export function applyRemote(remote) {
+  return serial(() => applyRemoteNow(remote));
+}
+
+async function applyRemoteNow(remote) {
   if (!remote || typeof remote !== "object") return [];
   const st = { ...(await stamps()) };
   const mine = await snapshot();

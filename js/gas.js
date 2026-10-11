@@ -173,8 +173,15 @@ export async function syncNow({ force = false } = {}) {
             inspections: unsent.map(({ sentAt, ...rest }) => rest),
           },
         });
+        // 送っている間に直された記録は、送った内容と違うので「送信済み」にしない（直した内容を
+        // 古い写しで上書きもしない）。いま保存されている記録に送信時刻だけを付ける
         const now = new Date().toISOString();
-        await db.putInspections(unsent.map((r) => ({ ...r, sentAt: now })));
+        const current = new Map((await db.getAllInspections()).map((r) => [r.id, r]));
+        const done = unsent
+          .map((r) => current.get(r.id))
+          .filter((r, i) => r && r.updatedAt === unsent[i].updatedAt)
+          .map((r) => ({ ...r, sentAt: now }));
+        await db.putInspections(done);
         status.sent = unsent.length;
       }
 

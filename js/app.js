@@ -13,7 +13,7 @@ import * as settingsSync from "./settingsSync.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.15.0";
+export const APP_VERSION = "0.15.1";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -51,7 +51,10 @@ async function importFiles(fileList) {
   const carry = await db.getCarry();
   const macHas = new Set();
   for (const a of (carry && carry.data && carry.data.aircraft) || []) {
+    // Macにある記録の名前（対象外も含む）から、原本がまだ届いていないものを除く
+    const pending = new Set(a.pending_files || []);
     for (const f of a.flights || []) if (f.file && !f.pending_raw) macHas.add(f.file);
+    for (const name of a.known_files || []) if (!pending.has(name)) macHas.add(name);
   }
   const macNeeds = (name) => !!carry && !macHas.has(name);
   const errors = [];
@@ -427,7 +430,10 @@ function renderSettings() {
       i.onchange = async () => {
         // Mac版と揃えるので、変えた項目に時刻を付ける
         const before = await settingsSync.snapshot();
-        await db.putAircraft({ ...ac, [key]: i.value.trim() });
+        // 画面を描いたときの機体ではなく、いま保存されている機体に足す（同じ機体の別の欄を
+        // 続けて直したときに、先に直した欄を古い値で戻さないように）
+        const latest = (await db.getAllAircraft()).find((x) => x.serial === ac.serial) || ac;
+        await db.putAircraft({ ...latest, [key]: i.value.trim() });
         if ((await settingsSync.stampChanges(before)).length) autoSync(true);
         await refresh();
       };

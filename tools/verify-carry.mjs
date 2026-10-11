@@ -83,6 +83,7 @@ const logbook = await page.evaluate(() => {
   const head = s1.find((r) => r[0] === "飛行年月日") || [];
   return { name: f.name, sheets: wb.SheetNames, 点検の行: rows("様式2 日常点検記録").length,
            概要: { 設計製造者: (s1.find((r) => r[0] === "設計製造者") || [])[1], 製造番号: (s1.find((r) => r[0] === "製造番号") || [])[1],
+                   機体認証: (s1.find((r) => r[0] === "機体認証の区分・機体認証書番号") || [])[1],
                    様式2にも: rows("様式2 日常点検記録").some((r) => r[0] === "製造番号") },
            記事の欄: head.filter((h) => String(h).startsWith("記事：")),
            整備の行: rows("様式3 点検整備記録").length, 飛行の行: rows("様式1 飛行記録").length };
@@ -112,7 +113,8 @@ const docsOk = !expectDocs || (documents.機体の書類 && documents.許可書�
 // 日誌のExcelは3様式。このiPhoneで記録した点検が様式2に入る（見出しまでで5〜6行あるので、それより多い）
 const t = target;
 const submitOk = logbook.sheets.length === 3 && logbook.点検の行 > 8
-  && logbook.概要.設計製造者 === "DJI" && logbook.概要.製造番号 === t.serial && logbook.概要.様式2にも
+  && logbook.概要.設計製造者 === (t.overview ? t.overview.manufacturer : "DJI") && logbook.概要.製造番号 === t.serial
+  && logbook.概要.様式2にも && (!t.overview || logbook.概要.機体認証 === t.overview.airworthiness)
   && logbook.記事の欄.length === 5
   && (!t.maintenance.length || logbook.整備の行 > 8)
   && (!expectDocs || (submitRows.some((x) => x.startsWith("具備資料")) && lastShared && lastShared.head === "%PDF-"));

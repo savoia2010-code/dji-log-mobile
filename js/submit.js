@@ -78,7 +78,7 @@ const MAINT_HEADERS = [
  */
 function overviewLines(ac) {
   const ov = obj(ac.overview);
-  const maker = str(ov.manufacturer) || (/^dji/i.test(str(ac.name) || str(ac.model)) ? "DJI" : "");
+  const maker = str(ov.manufacturer) || ([ac.name, ac.model].some((v) => /^dji/i.test(str(v))) ? "DJI" : "");
   const lines = [
     ["無人航空機の登録記号", str(ov.registration) || str(ac.registration)],
     ["型式", str(ov.model) || str(ac.model)],

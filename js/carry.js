@@ -214,8 +214,9 @@ const fmtMinutes = (min) => `${Math.floor(min / 60)}:${String(min % 60).padStart
  * 分へ切り捨ててから足す）。Macの最後の飛行より前の飛行は足し方が決まらないので
  * 空欄にし、Macに取り込んだときに確定させる。
  */
-function localFlightRows(localFlights, macFlights, settings, aircraft) {
-  const known = new Set(macFlights.map((f) => f.file));
+function localFlightRows(localFlights, macFlights, settings, aircraft, macKnown = []) {
+  // Macにある記録（Macで対象外にしたものも含む）は、このiPhoneだけの飛行として数えない
+  const known = new Set([...macFlights.map((f) => f.file), ...macKnown]);
   const last = macFlights[macFlights.length - 1];
   const lastKey = last ? sortKey(last.date, last.takeoff_time) : "";
   let total = last ? toMinutes(last.total_time)
@@ -260,9 +261,11 @@ export async function mergedAircraft(data) {
   const bySerial = new Map(localAircraft.map((a) => [a.serial, a]));
 
   const out = list(data && data.aircraft).map((a) => ({
-    serial: str(a.serial), label: str(a.label), registration: str(a.registration),
+    serial: str(a.serial), label: str(a.label), name: str(a.name), registration: str(a.registration),
     model: str(a.model), flights: list(a.flights), daily: list(a.daily),
     maintenance: list(a.maintenance),
+    // 冒頭に書く概要（設計製造者・製造番号・認証の番号）と、Macにある記録の名前（対象外も含む）
+    overview: obj(a.overview), knownFiles: list(a.known_files),
   }));
   // 具備資料だけがある機体（まだ飛ばしていない機体など）も載せる
   for (const [serial, d] of Object.entries(obj(data && data.documents && data.documents.aircraft))) {
@@ -301,7 +304,7 @@ export async function mergedAircraft(data) {
     a.flights = [
       ...a.flights,
       ...localFlightRows(localFlights.filter((f) => f.aircraftSn === a.serial),
-        a.flights, settings, bySerial.get(a.serial)),
+        a.flights, settings, bySerial.get(a.serial), a.knownFiles || []),
     ];
   }
   return out;
