@@ -138,6 +138,10 @@ main {
 
 .aircraft-item { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
 .aircraft-item:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.aircraft-item.retired > div:first-child, .aircraft-item.retired .field { opacity: .7; }
+.aircraft-item .badge { margin-left: 6px; }
+.aircraft-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip.retired { opacity: .7; }
 
 /* 日常点検 */
 .btn.small { padding: 6px 12px; font-size: 13px; border-radius: 8px; margin-top: 8px; }

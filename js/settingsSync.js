@@ -5,6 +5,7 @@
 //   includeNoGps / noGpsMinMinutes            GPSの無い記録の扱い
 //   defaultPilot                              操縦者（氏名・技能証明番号）
 //   aircraft:<シリアル>:registration / model / initialFlightSeconds   機体ごとの情報
+//   aircraft:<シリアル>:retired               使用終了（手放した機体）
 //
 // - 時刻を付けるのは「保存」で値が実際に変わった項目だけ。
 // - 相手側の時刻の方が新しい項目だけを、相手の値に合わせる（項目ごとに比べる）。
@@ -22,8 +23,9 @@ const LABELS = {
   registration: "登録記号",
   model: "型式",
   initialFlightSeconds: "アプリ導入前の総飛行時間",
+  retired: "使用終了",
 };
-const AIRCRAFT_FIELDS = ["registration", "model", "initialFlightSeconds"];
+const AIRCRAFT_FIELDS = ["registration", "model", "initialFlightSeconds", "retired"];
 
 // syncAt（項目ごとの時刻）を読み書きする処理を1つずつ順に行う（受け取りと保存が重なっても
 // 時刻を取りこぼさないように）
@@ -60,6 +62,7 @@ export async function snapshot() {
     out[`aircraft:${a.serial}:registration`] = a.registration || "";
     out[`aircraft:${a.serial}:model`] = a.model || "";
     out[`aircraft:${a.serial}:initialFlightSeconds`] = Number(a.initialFlightSeconds) || 0;
+    out[`aircraft:${a.serial}:retired`] = !!a.retired;
   }
   return out;
 }
@@ -98,9 +101,15 @@ export async function forBackup() {
     .map(([k, v]) => [k, { value: v, at: st[k] || "" }]));
 }
 
-/** バックアップの設定どうしを合わせる。項目ごとに新しい方、時刻が無ければ空欄でない方。 */
-export function merge(remote, local) {
+/**
+ * バックアップの設定どうしを合わせる。項目ごとに新しい方、時刻が無ければ空欄でない方。
+ * 記録ごと消した機体（erased のシリアル）の項目は残さない。
+ */
+export function merge(remote, local, erased = {}) {
   const out = { ...(remote && typeof remote === "object" ? remote : {}) };
+  for (const k of Object.keys(out)) {
+    if (k.startsWith("aircraft:") && k.split(":")[1] in (erased || {})) delete out[k];
+  }
   for (const [k, mine] of Object.entries(local || {})) {
     const theirs = out[k];
     if (!theirs || typeof theirs !== "object") { out[k] = mine; continue; }
@@ -133,14 +142,34 @@ async function set(key, value) {
   if (key.startsWith("aircraft:")) {
     const [, serial, field] = key.split(":");
     if (!serial || !AIRCRAFT_FIELDS.includes(field)) return false;
-    const v = field === "initialFlightSeconds" ? Number(value) : String(value ?? "").trim().slice(0, 100);
+    let v;
+    if (field === "retired") {
+      if (typeof value !== "boolean") return false;
+      v = value;
+    } else {
+      v = field === "initialFlightSeconds" ? Number(value) : String(value ?? "").trim().slice(0, 100);
+    }
     if (field === "initialFlightSeconds" && !(Number.isFinite(v) && v >= 0 && v <= 1e7)) return false;
-    const a = (await db.getAllAircraft()).find((x) => x.serial === serial)
-      || { serial, name: "", registration: "", model: "", initialFlightSeconds: 0 };
+    const existing = (await db.getAllAircraft()).find((x) => x.serial === serial);
+    // 記録ごと消した機体を、古い設定で作り直さない
+    const erased = (await db.getStoredSettings()).erasedAircraft;
+    if (!existing && erased && typeof erased === "object" && serial in erased) return false;
+    const a = existing || { serial, name: "", registration: "", model: "", initialFlightSeconds: 0 };
     await db.putAircraft({ ...a, [field]: v });
     return true;
   }
   return false;
+}
+
+/** 記録ごと消した機体の、項目ごとの時刻を消す。 */
+export function forgetAircraft(sn) {
+  return serial(() => forgetAircraftNow(sn));
+}
+
+async function forgetAircraftNow(sn) {
+  const st = { ...(await stamps()) };
+  for (const k of Object.keys(st)) if (k.startsWith(`aircraft:${sn}:`)) delete st[k];
+  await db.setSetting("syncAt", st);
 }
 
 /**

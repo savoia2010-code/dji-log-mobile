@@ -8,12 +8,13 @@ import { fmtDate, fmtTime, fmtDuration } from "./export.js";
 import { buildLogbooks, shareBlob } from "./submit.js";
 import { bindInspections, renderInspections } from "./inspections.js";
 import { bindCarry, isInstalled, mergedAircraft, protectStorage, renderCarry } from "./carry.js";
+import * as erase from "./erase.js";
 import * as gas from "./gas.js";
 import * as settingsSync from "./settingsSync.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.15.1";
+export const APP_VERSION = "0.16.0";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -58,6 +59,8 @@ async function importFiles(fileList) {
   }
   const macNeeds = (name) => !!carry && !macHas.has(name);
   const errors = [];
+  const marks = await erase.marks();
+  let erasedSkipped = 0;
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
@@ -79,6 +82,8 @@ async function importFiles(fileList) {
     }
     try {
       const flight = await parseLog(file);
+      // 記録ごと消した機体の、消す前の飛行は入れない
+      if (erase.flightErased(marks, flight.aircraftSn, flight.takeoffTime)) { erasedSkipped++; continue; }
       flight.place = await reverseGeocode(flight.lat, flight.lon);
       await db.ensureAircraft(flight.aircraftSn, flight.aircraftName);
       await db.putFlight(flight);
@@ -99,6 +104,7 @@ async function importFiles(fileList) {
   let msg = `新しい記録 ${added} 件を追加しました`;
   if (skipped) msg += `（取り込み済み ${skipped} 件は飛ばしました）`;
   if (resent) msg += ` / Macに原本が無い ${resent} 件をMacへ送ります`;
+  if (erasedSkipped) msg += ` / 記録ごと削除した機体の ${erasedSkipped} 件は入れませんでした`;
   if (failed) msg += ` / 読めなかったもの ${failed} 件`;
   text.textContent = msg + (errors.length ? `\n${errors.join("\n")}` : "");
 
@@ -151,7 +157,11 @@ function render() {
 function renderAircraftBar() {
   const bar = $("#aircraft-bar");
   bar.innerHTML = "";
-  if (state.aircraft.length < 2) { bar.hidden = true; return; }
+  if (state.aircraft.filter((a) => !a.retired || a.serial === state.aircraftFilter).length < 2) {
+    bar.hidden = true;
+    if (state.aircraftFilter && !state.aircraft.some((a) => a.serial === state.aircraftFilter)) state.aircraftFilter = "";
+    return;
+  }
   bar.hidden = false;
 
   const mk = (label, serial) => {
@@ -161,8 +171,10 @@ function renderAircraftBar() {
   };
   bar.append(mk(`すべて (${state.flights.length})`, ""));
   for (const ac of state.aircraft) {
+    // 使用終了の機体は、選んでいるとき以外は出さない（記録は「すべて」に残る）
+    if (ac.retired && state.aircraftFilter !== ac.serial) continue;
     const n = state.flights.filter((f) => f.aircraftSn === ac.serial).length;
-    bar.append(mk(`${aircraftLabel(ac)} (${n})`, ac.serial));
+    bar.append(mk(`${aircraftLabel(ac)}${ac.retired ? "（使用終了）" : ""} (${n})`, ac.serial));
   }
 }
 
@@ -215,7 +227,7 @@ function renderExportSelect() {
   const cur = sel.value;
   sel.innerHTML = '<option value="">すべての機体</option>';
   for (const ac of state.aircraft) {
-    const o = el("option", null, aircraftLabel(ac));
+    const o = el("option", null, aircraftLabel(ac) + (ac.retired ? "（使用終了）" : ""));
     o.value = ac.serial;
     sel.append(o);
   }
@@ -420,9 +432,12 @@ function renderSettings() {
     box.append(el("p", "help", "まだ機体がありません。"));
     return;
   }
-  for (const ac of state.aircraft) {
-    const item = el("div", "aircraft-item");
-    item.append(el("div", null, `${ac.name || ac.serial}（S/N: ${ac.serial}）`));
+  const ordered = [...state.aircraft].sort((x, y) => Number(!!x.retired) - Number(!!y.retired));
+  for (const ac of ordered) {
+    const item = el("div", "aircraft-item" + (ac.retired ? " retired" : ""));
+    const head = el("div", null, `${ac.name || ac.serial}（S/N: ${ac.serial}）`);
+    if (ac.retired) head.append(el("span", "badge muted", "使用終了"));
+    item.append(head);
     const mk = (label, key, ph) => {
       const fl = el("label", "field", label);
       const i = el("input");
@@ -442,8 +457,48 @@ function renderSettings() {
     };
     item.append(mk("登録記号", "registration", "JU1234567890"));
     item.append(mk("型式", "model", "例: DJI Mini 4 Pro"));
+    item.append(aircraftActions(ac));
     box.append(item);
   }
+}
+
+/** 使用終了にする・使用を再開する・記録ごと削除する。 */
+function aircraftActions(ac) {
+  const name = ac.name || ac.serial;
+  const row = el("div", "aircraft-actions");
+  const retire = el("button", "btn small", ac.retired ? "使用を再開する" : "使用終了にする");
+  retire.type = "button";
+  retire.onclick = async () => {
+    if (!ac.retired && !confirm(`${name} を使用終了にします。一覧から外れますが、記録は残ります（あとで再開できます）。`)) return;
+    const before = await settingsSync.snapshot();
+    const latest = (await db.getAllAircraft()).find((x) => x.serial === ac.serial) || ac;
+    await db.putAircraft({ ...latest, retired: !latest.retired });
+    if ((await settingsSync.stampChanges(before)).length) autoSync(true);
+    await refresh();
+    renderSettings();
+    await renderCarry();
+  };
+  const del = el("button", "btn small danger", "記録ごと削除");
+  del.type = "button";
+  del.onclick = async () => {
+    const flights = state.flights.filter((f) => f.aircraftSn === ac.serial).length;
+    const insp = (await db.getAllInspections()).filter((r) => r.aircraftSerial === ac.serial).length;
+    if (!confirm(`${name} と、このiPhoneにある飛行記録 ${flights}件・日常点検 ${insp}件を消します。`
+      + "\n\nMac版とGoogleドライブのバックアップからも消えます（Mac版の点検整備記録・具備資料も）。元に戻せません。"
+      + "\n\n手放した機体なら、消さずに「使用終了にする」を使ってください（飛行日誌は残しておく必要があります）。")) return;
+    const word = prompt("確認のため「削除」と入力してください");
+    if ((word || "").trim() !== "削除") { alert("消していません。"); return; }
+    const r = await erase.purge(ac.serial);
+    if (state.aircraftFilter === ac.serial) state.aircraftFilter = "";
+    await refresh();
+    renderSettings();
+    await renderCarry();
+    alert(`${name} を記録ごと消しました（飛行 ${r.flights}件・日常点検 ${r.inspections}件）。`
+      + (await gas.getConfig() ? "Mac版にも知らせます。" : "Mac版でも同じ機体を消してください（Googleドライブ同期が未設定のため、自動では伝わりません）。"));
+    autoSync(true);
+  };
+  row.append(retire, del);
+  return row;
 }
 
 // ---------- 出力 ----------

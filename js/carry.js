@@ -19,6 +19,7 @@ import {
   CARRY_FORMAT, CARRY_VERSION, DAILY_INSPECTION_ITEMS, ICLOUD_FOLDER, display,
 } from "./constants.js";
 import * as db from "./db.js";
+import * as erase from "./erase.js";
 import { fmtDate, fmtTime, fmtDuration, fmtLanding, pilotLabel } from "./export.js";
 import { formatPlace } from "./geocode.js";
 import { inspectionSummary, openInspection, postSummary } from "./inspections.js";
@@ -86,7 +87,14 @@ async function receive(file) {
 export async function acceptCarry(data) {
   if (!data || data.format !== CARRY_FORMAT || data.version !== CARRY_VERSION) return false;
   await db.putCarry(data);
-  await db.mergeAircraftFromMac(list(data.aircraft).map((a) => ({
+  // Mac版で記録ごと消した機体は、このiPhoneでも消す（機体を加える前に）
+  await erase.applyRemote(obj(data.erased_aircraft));
+  // 消した機体は、消す前の記録しか無ければ一覧に戻さない
+  const marks = await erase.marks();
+  const alive = (a) => !(str(a.serial) in marks)
+    || [...list(a.flights), ...list(a.daily), ...list(a.maintenance)]
+      .some((r) => !erase.dayErased(marks, str(a.serial), r && r.date));
+  await db.mergeAircraftFromMac(list(data.aircraft).filter(alive).map((a) => ({
     serial: str(a.serial), name: str(a.name), registration: str(a.registration), model: str(a.model),
   })));
   // Mac版で後から変えた設定（飛行とみなす距離・操縦者・機体の登録記号など）に合わせる
@@ -259,16 +267,21 @@ export async function mergedAircraft(data) {
   const localFlights = await db.getAllFlights();
   const localInspections = await db.getAllInspections();
   const bySerial = new Map(localAircraft.map((a) => [a.serial, a]));
+  // 記録ごと消した機体の、消す前の記録は見せない（Macがまだ消していない日誌が届いていても）
+  const marks = await erase.marks();
+  const keep = (serial) => (r) => !erase.dayErased(marks, serial, r && r.date);
 
   const out = list(data && data.aircraft).map((a) => ({
     serial: str(a.serial), label: str(a.label), name: str(a.name), registration: str(a.registration),
-    model: str(a.model), flights: list(a.flights), daily: list(a.daily),
-    maintenance: list(a.maintenance),
+    model: str(a.model), flights: list(a.flights).filter(keep(str(a.serial))),
+    daily: list(a.daily).filter(keep(str(a.serial))),
+    maintenance: list(a.maintenance).filter(keep(str(a.serial))),
     // 冒頭に書く概要（設計製造者・製造番号・認証の番号）と、Macにある記録の名前（対象外も含む）
     overview: obj(a.overview), knownFiles: list(a.known_files),
-  }));
+  })).filter((a) => !(a.serial in marks) || a.flights.length || a.daily.length || a.maintenance.length);
   // 具備資料だけがある機体（まだ飛ばしていない機体など）も載せる
   for (const [serial, d] of Object.entries(obj(data && data.documents && data.documents.aircraft))) {
+    if (serial in marks && !bySerial.has(serial)) continue;
     if (!out.some((a) => a.serial === serial)) {
       out.push({ serial, label: str(d.label) || serial, registration: str(d.registration),
         model: str(obj(d.spec).name), flights: [], daily: [], maintenance: [] });
@@ -306,8 +319,11 @@ export async function mergedAircraft(data) {
       ...localFlightRows(localFlights.filter((f) => f.aircraftSn === a.serial),
         a.flights, settings, bySerial.get(a.serial), a.knownFiles || []),
     ];
+    // 使用終了（手放した機体）。記録は見せるが、後ろに回す
+    a.retired = !!(bySerial.get(a.serial) || {}).retired;
   }
-  return out;
+  // 並べ替えは安定なので、使用中の機体どうしの順は変わらない
+  return out.sort((x, y) => Number(x.retired) - Number(y.retired));
 }
 
 /** 今日の点検と飛行が記録されているかを、いちばん上に示す。 */
@@ -436,7 +452,7 @@ export async function renderCarry() {
   if (aircraft.length && !aircraft.some((a) => a.serial === selectedSerial)) {
     // 今日飛んだ機体があればそれを、なければ先頭を表示する
     const flewToday = aircraft.find((a) => a.flights.some((f) => f.date === today()));
-    selectedSerial = (flewToday || aircraft[0]).serial;
+    selectedSerial = (flewToday || aircraft.find((a) => !a.retired) || aircraft[0]).serial;
   }
   const todayBox = $("#carry-today");
   todayBox.innerHTML = "";
@@ -450,7 +466,8 @@ export async function renderCarry() {
   if (aircraft.length > 1) {
     const pills = el("div", "pills");
     for (const a of aircraft) {
-      const b = el("button", `chip${a.serial === selectedSerial ? " active" : ""}`, a.label);
+      const b = el("button", `chip${a.serial === selectedSerial ? " active" : ""}${a.retired ? " retired" : ""}`,
+        a.label + (a.retired ? "（使用終了）" : ""));
       b.onclick = () => { selectedSerial = a.serial; renderCarry(); };
       pills.append(b);
     }

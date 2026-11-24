@@ -130,8 +130,10 @@ export async function recordPostAllOk(id) {
  */
 export async function openInspection(id, presetSerial = "", { phase = "" } = {}) {
   const settings = await db.getSettings();
-  const aircraft = await db.getAllAircraft();
   let r = id ? await db.getInspection(id) : null;
+  // 使用終了の機体は選ぶ候補から外す（その機体の記録を直すときは残す）
+  const aircraft = (await db.getAllAircraft())
+    .filter((a) => !a.retired || (r && r.aircraftSerial === a.serial) || a.serial === presetSerial);
   const isNew = !r;
   if (!r) {
     // 機体は、呼び出し元の指定（今日飛ばした機体など）か、前回点検した機体を初期値にする

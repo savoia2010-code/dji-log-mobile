@@ -142,6 +142,7 @@ export async function setSetting(key, value) {
 
 export const getAllAircraft = () => tx("aircraft", "readonly", (s) => s.getAll());
 export const putAircraft = (a) => tx("aircraft", "readwrite", (s) => s.put(a));
+export const deleteAircraft = (serial) => tx("aircraft", "readwrite", (s) => s.delete(serial));
 
 /** 記録の取り込み時に機体を自動登録する（登録記号などは後から利用者が補う）。 */
 export async function ensureAircraft(serial, name) {
@@ -167,6 +168,7 @@ export async function mergeAircraftFromMac(list) {
     if (!a.serial) continue;
     const existing = await tx("aircraft", "readonly", (s) => s.get(a.serial));
     await putAircraft({
+      ...(existing || {}),            // 使用終了など、ここで扱わない欄を残す
       serial: a.serial,
       name: (existing && existing.name) || a.name || "",
       registration: (existing && existing.registration) || a.registration || "",

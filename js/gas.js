@@ -12,6 +12,7 @@
 
 import { SYNC_FORMAT, SYNC_VERSION } from "./constants.js";
 import * as db from "./db.js";
+import * as erase from "./erase.js";
 import * as settingsSync from "./settingsSync.js";
 
 const PREFIX = "DJILOG1:";
@@ -213,6 +214,8 @@ export async function syncNow({ force = false } = {}) {
         // Mac版と揃える設定（飛行とみなす距離・操縦者・機体の登録記号など）も、変えた時刻と
         // 一緒に残す。入れ直したときに初期値に戻らないように。Mac版もこれを見て合わせる
         sync: await settingsSync.forBackup(),
+        // 記録ごと消した機体（Mac版もこれを見て消す）
+        erased: await erase.marks(),
       };
       const digest = await digestOf(local);
       if (digest !== (await db.getSettings()).gasBackupDigest) {
@@ -255,25 +258,30 @@ export async function syncNow({ force = false } = {}) {
 
 /**
  * バックアップを合わせる。点検は識別子ごとに新しい方、飛行は記録ファイル名ごと。
- * 合わせるだけなので、バックアップの記録が減ることはない。
+ * 合わせるだけなので、バックアップの記録が減るのは、記録ごと削除した機体の分だけ。
  */
-export function mergeBackup(remote, inspections, flights, { sync = {} } = {}) {
+export function mergeBackup(remote, inspections, flights, { sync = {}, erased = {} } = {}) {
   const old = remote && remote.format === BACKUP_FORMAT ? remote : { inspections: [], flights: [] };
+  // 記録ごと消した機体の、消す前の記録は残さない（どちらかで消していれば消す）
+  const marks = erase.mergeMarks(old.erased, erased);
   const insp = new Map();
   for (const r of [...(old.inspections || []), ...inspections]) {
     if (!r || !r.id) continue;
+    if (erase.dayErased(marks, r.aircraftSerial, r.date)) continue;
     const cur = insp.get(r.id);
     if (!cur || String(r.updatedAt) >= String(cur.updatedAt)) insp.set(r.id, r);
   }
   const fl = new Map();
   for (const f of [...(old.flights || []), ...flights]) {
-    if (f && f.fileName) fl.set(f.fileName, f);   // 手元のものを後に置き、手元を優先する
+    if (!f || !f.fileName || erase.flightErased(marks, f.aircraftSn, f.takeoffTime)) continue;
+    fl.set(f.fileName, f);   // 手元のものを後に置き、手元を優先する
   }
   return {
     format: BACKUP_FORMAT, version: 1, savedAt: new Date().toISOString(),
     inspections: [...insp.values()], flights: [...fl.values()],
     // 設定は項目ごとに新しく変えた方（入れ直したばかりのiPhoneの初期値で上書きしない）
-    sync: settingsSync.merge(old.sync, sync),
+    sync: settingsSync.merge(old.sync, sync, marks),
+    erased: marks,
   };
 }
 
@@ -293,13 +301,18 @@ export async function restoreFromBackup() {
   const { backup } = await call(conf, "getBackup");
   if (!backup || backup.format !== BACKUP_FORMAT) throw new GasError("バックアップがありません");
 
+  // 記録ごと消した機体は、戻す前に消す（消した記録を戻さない）
+  await erase.applyRemote(backup.erased);
+  const marks = await erase.marks();
   const mine = new Map((await db.getAllInspections()).map((r) => [r.id, r]));
   const insp = (backup.inspections || []).filter((r) => r && r.id
+    && !erase.dayErased(marks, r.aircraftSerial, r.date)
     && (!mine.has(r.id) || String(r.updatedAt) > String(mine.get(r.id).updatedAt)));
   await db.putInspections(insp);
 
   const have = new Set((await db.getAllFlights()).map((f) => f.fileName));
-  const flights = (backup.flights || []).filter((f) => f && f.fileName && !have.has(f.fileName));
+  const flights = (backup.flights || []).filter((f) => f && f.fileName && !have.has(f.fileName)
+    && !erase.flightErased(marks, f.aircraftSn, f.takeoffTime));
   await db.putFlights(flights);
   for (const f of flights) await db.ensureAircraft(f.aircraftSn, f.aircraftName);
 
