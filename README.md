@@ -18,8 +18,9 @@ Mac版（`../dji-log`）とは別の実験プロジェクトです。
 
 1. iPhoneのSafariでこのアプリを開く
 2. 共有ボタン →「ホーム画面に追加」（アプリとして使えるようになる）
-3. 「飛行記録を読み込む」→「ファイル」App →「このiPhone内」→ **DJI Fly** → **FlightRecords**
-   → .txt を選択（まとめて選べる）
+3. 「FlightRecords フォルダを読み込む」→「このiPhone内」→ **DJI Fly** → **FlightRecords**
+   フォルダを開いて「開く」（iOS 18.4 から。読み込み済みの記録は飛ばすので、毎回フォルダごとでよい。
+   それより前のiOSでは「ファイルを選んで読み込む」で .txt をまとめて選ぶ）
 4. 設定で操縦者氏名と機体の登録記号（JU〜）を入力
 5. 記録をタップして目的・特定飛行などを補記
 6. 「様式1 Excelを書き出す」→ 共有シートから「ファイル」Appに保存
@@ -131,7 +132,8 @@ node tools/verify-today.mjs /path/to/飛行日誌_携行用.json <その日の�
 
 実機でしか確かめられないのは次の2つだけ:
 
-- 「ファイル」App から DJI Fly → FlightRecords を選ぶ操作
+- 「ファイル」App から DJI Fly → FlightRecords フォルダを選ぶ操作
+  （フォルダ選択 webkitdirectory は iOS 18.4 から。ホーム画面に追加したアプリでも使えるかは実機で確認）
 - ホーム画面に追加したときの動作（Service Workerは**HTTPSかlocalhostが必要**。
   `http://192.168.x.x:8310` では登録されない）
 

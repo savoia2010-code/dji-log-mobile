@@ -393,7 +393,7 @@ function todayCard(aircraft, currentSerial, documents) {
 
   card.append(el("p", "help",
     "飛行の前に「点検」タブで日常点検を記録し、飛行が終わるたびに「記録」タブの"
-    + "「飛行記録を読み込む」で DJI Fly の記録を取り込んでください。"
+    + "「FlightRecords フォルダを読み込む」で DJI Fly の記録を取り込んでください。"
     + "取り込んだ飛行はここに「iPhoneのみ」として並びます。"));
 
   const actions = el("div", "today-actions");

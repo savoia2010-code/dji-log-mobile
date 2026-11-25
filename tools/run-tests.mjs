@@ -33,6 +33,7 @@ const checks = [
   ["その日の飛行の扱い", ["tools/verify-today.mjs", fx("carry-sample.json"),
     fx("flight-sample.json"), "2026-07-14T15:10:00+09:00", "1:16"]],
   ["機体の使用終了と記録ごとの削除", ["tools/verify-aircraft.mjs", fx("carry-sample.json"), fx("flight-sample.json")]],
+  ["飛行記録をフォルダごと読み込む", ["tools/verify-folder.mjs", fx("flight-sample.json")]],
 ];
 
 // Googleドライブ同期の検証は、Mac版の検証用GASサーバー（Code.gs を手元で動かすもの）を使う。

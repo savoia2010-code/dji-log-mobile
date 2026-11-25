@@ -14,7 +14,7 @@ import * as settingsSync from "./settingsSync.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.16.0";
+export const APP_VERSION = "0.17.0";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -38,9 +38,31 @@ const aircraftLabel = (a) =>
 
 // ---------- 読み込み ----------
 
+// DJI Fly などが書き出す飛行記録の名前（DJIFlightRecord_2026-07-14_[10-00-00].txt）
+const FLIGHT_RECORD = /^DJIFlightRecord.*\.txt$/i;
+
+/**
+ * 読み込む記録を選ぶ。フォルダごと選んだときは、飛行記録の名前のものだけにする
+ * （フォルダには飛行記録でないファイルも入りうる）。
+ */
+export function pickFlightFiles(fileList) {
+  const txt = [...fileList].filter((f) => f.name.toLowerCase().endsWith(".txt"));
+  const fromFolder = txt.some((f) => f.webkitRelativePath);
+  return fromFolder ? txt.filter((f) => FLIGHT_RECORD.test(f.name)) : txt;
+}
+
 async function importFiles(fileList) {
-  const files = [...fileList].filter((f) => f.name.toLowerCase().endsWith(".txt"));
-  if (!files.length) return;
+  const files = pickFlightFiles(fileList);
+  if (!files.length) {
+    if (fileList.length) {
+      const status = $("#import-status");
+      status.hidden = false;
+      $("#import-text").textContent = "飛行記録（DJIFlightRecord_….txt）が見つかりませんでした。"
+        + "DJI Fly の FlightRecords フォルダを選んでください。";
+      setTimeout(() => { status.hidden = true; }, 8000);
+    }
+    return;
+  }
 
   const status = $("#import-status");
   const bar = $("#import-bar");
@@ -101,7 +123,7 @@ async function importFiles(fileList) {
   }
 
   bar.style.width = "100%";
-  let msg = `新しい記録 ${added} 件を追加しました`;
+  let msg = added || !skipped ? `新しい記録 ${added} 件を追加しました` : "新しい記録はありませんでした";
   if (skipped) msg += `（取り込み済み ${skipped} 件は飛ばしました）`;
   if (resent) msg += ` / Macに原本が無い ${resent} 件をMacへ送ります`;
   if (erasedSkipped) msg += ` / 記録ごと削除した機体の ${erasedSkipped} 件は入れませんでした`;
@@ -523,6 +545,7 @@ async function exportXlsx() {
 
 function bind() {
   $("#file-input").onchange = (e) => { importFiles(e.target.files); e.target.value = ""; };
+  $("#folder-input").onchange = (e) => { importFiles(e.target.files); e.target.value = ""; };
   // 「今日の記録」から読み込んだときは、進み具合の見える「記録」タブで読み込み、
   // 終わったら携行タブへ戻す。読めなかったものがあれば、理由が見えるよう留まる
   $("#carry-flight-input").onchange = async (e) => {

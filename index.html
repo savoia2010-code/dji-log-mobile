@@ -62,7 +62,7 @@
     <div id="carry-today"></div>
     <!-- 「今日の記録」から飛行記録を読み込むための入力。「記録」タブのボタンと同じく、
          同じ画面にある入力を label で開く形にする（実機で動いている作りに揃える） -->
-    <input type="file" id="carry-flight-input" accept=".txt" multiple hidden>
+    <input type="file" id="carry-flight-input" webkitdirectory multiple hidden>
     <div class="card">
       <label class="btn primary block">
         Macから受け取る
@@ -80,14 +80,20 @@
   <!-- 一覧 -->
   <section id="view-list" hidden>
     <div class="card import">
+      <!-- フォルダごと選ぶ（iOS 18.4 から）。読み込み済みの記録は飛ばすので、毎回フォルダごとでよい -->
       <label class="btn primary block">
-        飛行記録を読み込む
-        <input type="file" id="file-input" accept=".txt" multiple hidden>
+        FlightRecords フォルダを読み込む
+        <input type="file" id="folder-input" webkitdirectory multiple hidden>
       </label>
       <p class="help">
-        「ファイル」App →「このiPhone内」→ <b>DJI Fly</b> → <b>FlightRecords</b> の中の
-        .txt を選んでください。まとめて選択できます。
+        「このiPhone内」→ <b>DJI Fly</b> と進み、<b>FlightRecords</b> フォルダを開いて
+        右上の「開く」を押してください。前に読み込んだ記録は飛ばして、新しい記録だけを入れます。
       </p>
+      <label class="btn small">
+        ファイルを選んで読み込む
+        <input type="file" id="file-input" accept=".txt" multiple hidden>
+      </label>
+      <p class="help">フォルダを選べないとき（iOS 18.3 以前など）は、こちらで .txt を選んでください。</p>
       <div id="import-status" class="status" hidden>
         <div class="bar"><div class="bar-fill" id="import-bar"></div></div>
         <div class="status-text" id="import-text"></div>
