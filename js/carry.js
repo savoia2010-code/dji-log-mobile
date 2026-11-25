@@ -27,6 +27,7 @@ import { submitSection } from "./submit.js";
 import * as settingsSync from "./settingsSync.js";
 import { autoInspect } from "./autoInspect.js";
 import { maintenanceRow } from "./maintenance.js";
+import { cleanup as cleanupGubi, effective as effectiveGubi, openGubiEditor } from "./gubiEdit.js";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -106,6 +107,8 @@ export async function acceptCarry(data) {
   }
   // Macの日誌と見比べて、点検の記録を自動で作る（Macにある日は作らない・重なった自動の記録は外す）
   await autoInspect();
+  // このiPhoneで直した具備資料のうち、Macに届いて日誌に入ったものは消す
+  await cleanupGubi(data);
   await renderCarry();
   return true;
 }
@@ -508,10 +511,11 @@ export async function renderCarry() {
   box.append(head);
 
   const documents = saved && saved.data.documents;
-  const doc = documents && obj(documents.aircraft)[ac.serial];
+  const ownAircraft = (await db.getAllAircraft()).find((x) => x.serial === ac.serial) || ac;
+  const doc = effectiveGubi(documents, ac.serial, await db.getAllGubi(), ownAircraft);
   // 提示・提出を求められたときに、すぐ出せるよう上の方に置く
   box.append(submitSection(ac, documents));
-  box.append(documentsSection(documents, doc));
+  box.append(documentsSection(documents, doc, ac.serial));
   box.append(permitsSection(documents));
 
   box.append(section("日常点検記録", ac.daily.length, true,
@@ -563,27 +567,43 @@ function showLarge(src, caption) {
   document.body.append(overlay);
 }
 
+// 具備資料の欄を開いているか（直して保存したあと、描き直しても開いたままにする）
+let documentsOpen = false;
+
 /** 機体ごとの具備資料（製造者・名称・重量等／運用限界等／追加基準への適合性）。 */
-function documentsSection(documents, doc) {
+function documentsSection(documents, doc, serial) {
   const d = el("details", "card section");
+  d.open = documentsOpen;
+  d.addEventListener("toggle", () => { documentsOpen = d.open; });
   d.append(el("summary", "section-title", "具備資料（機体）"));
-  if (!doc) {
-    d.append(el("p", "help", "この機体の具備資料はまだありません。Mac版の「具備資料」で作ると、受け取ったときにここに入ります。"));
+  const editBtn = (label) => {
+    const b = el("button", "btn small", label);
+    b.type = "button";
+    b.onclick = () => openGubiEditor(serial);
+    return b;
+  };
+  if (!doc.exists) {
+    d.append(el("p", "help", "この機体の具備資料はまだありません。ここで作るか、Mac版の「具備資料」で作ってください。"));
+    if (documents) d.append(editBtn("具備資料を作る"));
     return d;
+  }
+  d.append(editBtn("具備資料を直す・写真を入れる"));
+  if (doc.pending) {
+    d.append(el("p", "help warn-text", "このiPhoneで直した内容があります。Macに届くと、提出用のPDFにも反映されます。"));
   }
   const spec = obj(doc.spec);
   const photos = obj(doc.photos);
-  const slots = obj(documents.photo_slots);
+  const slots = obj(documents && documents.photo_slots);
 
   d.append(el("h3", "doc-title", "無人航空機の製造者、名称、重量等"));
   kv(d, "登録記号", str(doc.registration) || "（未入力）");
-  for (const [key, label] of list(documents.spec_fields)) kv(d, str(label), str(spec[key]));
+  for (const [key, label] of list(documents && documents.spec_fields)) kv(d, str(label), str(spec[key]));
   const g1 = el("div", "doc-photos");
   for (const slot of ["front", "top", "side", "controller"]) g1.append(photo(photos[slot], str(slots[slot])));
   d.append(g1);
 
   d.append(el("h3", "doc-title", "無人航空機の運用限界等"));
-  for (const [key, label] of list(documents.limit_fields)) {
+  for (const [key, label] of list(documents && documents.limit_fields)) {
     kv(d, str(label), str(spec[key]) || (key === "max_payload_kg" ? "記載なし" : ""));
   }
   const g2 = el("div", "doc-photos");

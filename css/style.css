@@ -236,15 +236,15 @@ main {
 }
 .seg .chk input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
 .seg .chk:has(input:focus-visible) { outline: 2px solid var(--accent); }
-.seg .chk:has(input[value="正常"]:checked) {
+.seg .chk:has(input[value="正常"]:checked), .seg .chk:has(input[value="適"]:checked) {
   background: #e6f4ea; border-color: var(--ok); color: var(--ok); font-weight: 700;
 }
-.seg .chk:has(input[value="異常"]:checked) {
+.seg .chk:has(input[value="異常"]:checked), .seg .chk:has(input[value="否"]:checked) {
   background: #fdeceb; border-color: var(--warn); color: var(--warn); font-weight: 700;
 }
 @media (prefers-color-scheme: dark) {
-  .seg .chk:has(input[value="正常"]:checked) { background: #16311f; }
-  .seg .chk:has(input[value="異常"]:checked) { background: #3a1a18; color: #f2a59f; }
+  .seg .chk:has(input[value="正常"]:checked), .seg .chk:has(input[value="適"]:checked) { background: #16311f; }
+  .seg .chk:has(input[value="異常"]:checked), .seg .chk:has(input[value="否"]:checked) { background: #3a1a18; color: #f2a59f; }
 }
 /* 飛行前・飛行後の切り替え。選んでいる方の結果だけを見せる */
 .phase-tabs { margin: 10px 0 2px; }
@@ -274,3 +274,16 @@ main {
   border-radius: 10px; background: var(--input-bg); color: var(--text);
 }
 #maint h2 { margin-top: 0; }
+
+/* 具備資料の入力：写真の置き場所 */
+.gubi-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 8px 0; }
+.gubi-photo { text-align: center; font-size: 12px; color: var(--muted); }
+.gubi-photo img { width: 100%; height: 100px; object-fit: contain; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+.gubi-photo .doc-photo-none { height: 100px; }
+.gubi-photo-caption { margin: 4px 0; }
+.gubi-photo-actions { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+.gubi-photo-actions .btn.small { margin-top: 0; padding: 6px 8px; font-size: 12px; }
+.gubi-cat { display: block; margin: 10px 0 4px; font-weight: 600; }
+.gubi-req { border-left: 3px solid var(--border); padding: 4px 0 8px 10px; margin: 6px 0 12px; }
+.gubi-req .seg { margin: 6px 0; }
+.gubi-req select, .gubi-req textarea { margin-top: 6px; }

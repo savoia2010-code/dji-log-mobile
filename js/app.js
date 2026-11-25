@@ -11,12 +11,13 @@ import { bindCarry, isInstalled, mergedAircraft, protectStorage, renderCarry } f
 import * as erase from "./erase.js";
 import { autoInspect } from "./autoInspect.js";
 import { bindMaintenance, renderMaintenance } from "./maintenance.js";
+import { bindGubi } from "./gubiEdit.js";
 import * as gas from "./gas.js";
 import * as settingsSync from "./settingsSync.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.19.0";
+export const APP_VERSION = "0.20.0";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -593,6 +594,7 @@ function bind() {
 
   bindInspections();
   bindMaintenance();
+  bindGubi();
   bindCarry();
   bindGas();
 

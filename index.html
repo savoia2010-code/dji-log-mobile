@@ -11,7 +11,7 @@
   default-src 'self';
   script-src 'self' 'wasm-unsafe-eval';
   style-src 'self';
-  img-src 'self' data:;
+  img-src 'self' data: blob:;
   connect-src 'self' https://mreversegeocoder.gsi.go.jp https://habs.rad.naro.go.jp
     https://script.google.com https://script.googleusercontent.com;
   object-src 'none';
@@ -274,6 +274,16 @@
     <button class="btn primary" id="maint-save">保存</button>
   </div>
   <div class="sheet-body" id="maint-body"></div>
+</div>
+
+<!-- 具備資料の入力 -->
+<div id="gubi-editor" class="sheet" hidden>
+  <div class="sheet-head">
+    <button class="btn" id="gubi-close">閉じる</button>
+    <span id="gubi-title"></span>
+    <button class="btn primary" id="gubi-save">保存</button>
+  </div>
+  <div class="sheet-body" id="gubi-body"></div>
 </div>
 
 <script src="./vendor/xlsx.mini.min.js"></script>

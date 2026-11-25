@@ -65,7 +65,8 @@ export async function renderInspections() {
   const list = (await db.getAllInspections())
     .sort((a, b) => (b.date + b.updatedAt).localeCompare(a.date + a.updatedAt));
   // 点検整備記録の未送信分も一緒に送るので、数に含める
-  const unsent = list.filter(isUnsent).length + (await db.getAllMaintenance()).filter(isUnsent).length;
+  const unsent = list.filter(isUnsent).length + (await db.getAllMaintenance()).filter(isUnsent).length
+    + (await db.getAllGubi()).filter(isUnsent).length;
 
   $("#insp-send").textContent = unsent ? `Macへ送る（未送信 ${unsent}件）` : "Macへ送る";
   $("#insp-send-help").textContent = unsent
@@ -408,7 +409,9 @@ async function sendToMac() {
   const allMaint = await db.getAllMaintenance();
   let targets = all.filter(isUnsent);
   let maintTargets = allMaint.filter(isUnsent);
-  if (!targets.length && !maintTargets.length) {
+  // 具備資料の直した部分（まだ送っていないもの）も一緒に送る
+  const gubiTargets = (await db.getAllGubi()).filter(isUnsent);
+  if (!targets.length && !maintTargets.length && !gubiTargets.length) {
     if (!all.length && !allMaint.length) { alert("送る点検記録がありません。"); return; }
     if (!confirm("未送信の記録はありません。すべての記録を送り直しますか？（Mac側で重複はしません）")) return;
     targets = all;
@@ -422,6 +425,7 @@ async function sendToMac() {
     inspections: targets.map(({ sentAt, ...rest }) => rest),
     // 点検整備記録の未送信分も一緒に送る
     maintenance: maintTargets.map(({ sentAt, ...rest }) => rest),
+    documents: gubiTargets.map(({ sentAt, key, ...rest }) => rest),
   };
   const d = new Date();
   const name = `点検記録_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`
@@ -456,6 +460,7 @@ async function sendToMac() {
   const now = new Date().toISOString();
   await db.putInspections(targets.map((r) => ({ ...r, sentAt: now })));
   await db.putMaintenanceList(maintTargets.map((r) => ({ ...r, sentAt: now })));
+  await db.putGubiList(gubiTargets.map((p) => ({ ...p, sentAt: now })));
   await renderInspections();
   const { renderMaintenance } = await import("./maintenance.js");
   await renderMaintenance();

@@ -74,6 +74,21 @@ await page.selectOption("#mt-aircraft", "SN-TEST-0001");
 await page.fill("#mt-detail", "プロペラ4枚を交換（純正品）");
 await page.click("#maint-save");
 await page.waitForFunction(() => /送信済み/.test(document.getElementById("maint-list").textContent), null, { timeout: 15000 });
+// 具備資料の直した部分（仕様と写真）。写真は別に送る
+await page.evaluate(async () => {
+  const db = await import("./js/db.js");
+  const at = new Date().toISOString();
+  await db.putGubiList([
+    { key: "SN-TEST-0001|spec", serial: "SN-TEST-0001", section: "spec", updatedAt: at, sentAt: "", data: { name: "テスト機" } },
+    { key: "SN-TEST-0001|photo:front", serial: "SN-TEST-0001", section: "photo:front", updatedAt: at, sentAt: "",
+      data: { dataUrl: "data:image/jpeg;base64,/9j/4AAQ" } },
+  ]);
+});
+await page.click('.tab-btn[data-view="settings"]');
+await page.click("#gas-sync");
+await page.waitForFunction(() => /具備資料 2件を送信/.test(document.getElementById("gas-status").textContent), null, { timeout: 15000 });
+const gubiSent = await page.evaluate(async () => (await (await import("./js/db.js")).getAllGubi()).every((p) => p.sentAt));
+await page.click('.tab-btn[data-view="inspections"]');
 // 何も変わっていなければ、同期してもバックアップを送り直さない（通信を減らす）
 await page.click('.tab-btn[data-view="settings"]');
 const beforeIdle = actions.length;
@@ -114,6 +129,7 @@ const resentOld = ((await callMock("listFlightLogs")).items || []).some((x) => x
 const inbox = (await callMock("listInbox")).items || [];
 const sentRecords = inbox.flatMap((i) => JSON.parse(i.content).inspections || []);
 const sentMaint = inbox.flatMap((i) => JSON.parse(i.content).maintenance || []);
+const sentDocs = inbox.map((i) => (JSON.parse(i.content).documents || []).map((d) => d.section)).filter((x) => x.length);
 const backup = (await callMock("getBackup")).backup;
 
 // 同じ機体の登録記号と型式を続けて直しても、先に直した登録記号が戻らない
@@ -220,6 +236,7 @@ const result = {
   送られた点検: sentRecords.length, バックアップの点検: backup ? backup.inspections.length : 0,
   送られた点検整備: sentMaint.map((m) => m.detail), バックアップの点検整備: backup ? (backup.maintenance || []).length : 0,
   戻した点検整備: restoredMaint,
+  送った具備資料: sentDocs, 具備資料を送信済みにした: gubiSent,
   戻したあと: restored.includes("全項目 正常"), 合言葉違い: wrongStatus,
   読み込み直しで原本を送った: resentOld,
   機体の欄を続けて直す: twoEdits,
@@ -238,6 +255,7 @@ await browser.close();
 const ok = result.日誌の受信 && result.送られた点検 === 1 && result.バックアップの点検 === 1
   && sentMaint.length === 1 && sentMaint[0].detail === "プロペラ4枚を交換（純正品）" && !("sentAt" in sentMaint[0])
   && result.バックアップの点検整備 === 1 && restoredMaint === 1
+  && JSON.stringify(sentDocs) === JSON.stringify([["spec"], ["photo:front"]]) && gubiSent
   && result.戻したあと && result.空のときに戻すか聞いた && restoredSettings.距離 === 5
   && twoEdits[0] === "JU0000000077" && twoEdits[1] === "見本型式" && fromMac === "6"
   && pilotFromMac === "見本 一郎" && syncNotice

@@ -65,6 +65,8 @@ export async function purge(serial, at = new Date().toISOString()) {
     await db.deleteInspection(r.id);
     inspections++;
   }
+  // このiPhoneで直した具備資料（まだMacに送っていないものも）
+  for (const p of await db.getAllGubi()) if (p.serial === serial) await db.deleteGubi(p.key);
   for (const r of await db.getAllMaintenance()) {
     if (r.aircraftSerial !== serial || !dayErased(m, serial, r.date)) continue;
     await db.deleteMaintenance(r.id);

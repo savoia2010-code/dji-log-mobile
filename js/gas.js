@@ -168,12 +168,17 @@ export async function syncNow({ force = false } = {}) {
       const inspections = await db.getAllInspections();
       const unsent = inspections.filter(isUnsent);
       const unsentMaint = (await db.getAllMaintenance()).filter(isUnsent);
-      if (unsent.length || unsentMaint.length) {
+      // 具備資料の直した部分。写真は大きいので1枚ずつ別に送る
+      const unsentGubi = (await db.getAllGubi()).filter(isUnsent);
+      const gubiText = unsentGubi.filter((p) => !p.section.startsWith("photo:"));
+      const gubiPhotos = unsentGubi.filter((p) => p.section.startsWith("photo:"));
+      if (unsent.length || unsentMaint.length || gubiText.length) {
         await call(conf, "putInspections", {
           data: {
             format: SYNC_FORMAT, version: SYNC_VERSION, exportedAt: new Date().toISOString(),
             inspections: unsent.map(({ sentAt, ...rest }) => rest),
             maintenance: unsentMaint.map(({ sentAt, ...rest }) => rest),
+            documents: gubiText.map(({ sentAt, key, ...rest }) => rest),
           },
         });
         // 送っている間に直された記録は、送った内容と違うので「送信済み」にしない（直した内容を
@@ -192,6 +197,22 @@ export async function syncNow({ force = false } = {}) {
           .map((r) => ({ ...r, sentAt: now })));
         status.sent = unsent.length;
         status.sentMaintenance = unsentMaint.length;
+      }
+      for (const p of gubiPhotos) {
+        await call(conf, "putInspections", {
+          data: { format: SYNC_FORMAT, version: SYNC_VERSION, exportedAt: new Date().toISOString(),
+                  inspections: [], documents: [(({ sentAt, key, ...rest }) => rest)(p)] },
+        });
+      }
+      if (unsentGubi.length) {
+        // 送っている間に直された部分は「送信済み」にしない
+        const now = new Date().toISOString();
+        const current = new Map((await db.getAllGubi()).map((p) => [p.key, p]));
+        await db.putGubiList(unsentGubi
+          .map((p) => current.get(p.key))
+          .filter((p, i) => p && p.updatedAt === unsentGubi[i].updatedAt)
+          .map((p) => ({ ...p, sentAt: now })));
+        status.sentDocuments = unsentGubi.length;
       }
 
       // 1b. 読み込んだ飛行記録の原本を送る（Mac版が解析して日誌に入れる）
@@ -245,6 +266,7 @@ export async function syncNow({ force = false } = {}) {
       const parts = [];
       if (status.sent) parts.push(`点検 ${status.sent}件を送信`);
       if (status.sentMaintenance) parts.push(`点検整備 ${status.sentMaintenance}件を送信`);
+      if (status.sentDocuments) parts.push(`具備資料 ${status.sentDocuments}件を送信`);
       if (status.flights) parts.push(`飛行記録 ${status.flights}件を送信`);
       if (status.received) parts.push("Macの日誌を受信");
       status.message = parts.join("、") || "変更はありませんでした";

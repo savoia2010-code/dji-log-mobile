@@ -1,0 +1,366 @@
+{
+ "rules": [
+  {
+   "id": "airport_150m",
+   "clause": "5-1",
+   "heading": "空港等周辺・緊急用務空域・地表又は水面から150m以上の高さの空域における飛行",
+   "requirements": [
+    {
+     "id": "airport_150m-1",
+     "standard": "機体について、航空機からの視認をできるだけ容易にするため、灯火を装備すること又は飛行時に機体を認識しやすい塗色を行うこと。",
+     "alternatives": []
+    }
+   ]
+  },
+  {
+   "id": "did",
+   "clause": "5-2",
+   "heading": "人又は家屋の密集している地域の上空における飛行",
+   "requirements": [
+    {
+     "id": "did-1",
+     "standard": "機体について、第三者及び物件に接触した際の危害を軽減する機能を有すること。",
+     "alternatives": [
+      "プロペラガード等を装備していないが、飛行の際は飛行経路全体を見渡せる位置に補助者を配置し、第三者が飛行範囲内に立ち入らないよう注意喚起を行う。",
+      "プロペラガードを装備している。装備しない場合は、飛行の際は飛行経路全体を見渡せる位置に補助者を配置し、第三者が飛行範囲内に立ち入らないよう注意喚起を行う。"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "night",
+   "clause": "5-3",
+   "heading": "夜間飛行",
+   "requirements": [
+    {
+     "id": "night-1",
+     "standard": "機体について、無人航空機の姿勢及び方向が正確に視認できるよう灯火を有していること。ただし、無人航空機の飛行範囲が照明等で十分照らされている場合は、この限りでない。",
+     "alternatives": [
+      "飛行範囲が照明等で十分に照らされており、機体の姿勢及び方向の視認が可能な状態で飛行する。"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "bvlos",
+   "clause": "5-4",
+   "heading": "目視外飛行",
+   "requirements": [
+    {
+     "id": "bvlos-1",
+     "standard": "自動操縦システムを装備し、機体に設置されたカメラ等により機体の外の様子を監視できること。",
+     "alternatives": []
+    },
+    {
+     "id": "bvlos-2",
+     "standard": "地上において、無人航空機の位置及び異常の有無を把握できること（不具合発生時に不時着した場合を含む。）。",
+     "alternatives": []
+    },
+    {
+     "id": "bvlos-3",
+     "standard": "不具合発生時に危機回避機能（フェールセーフ機能）が正常に作動すること。",
+     "alternatives": []
+    }
+   ]
+  },
+  {
+   "id": "distance30",
+   "clause": "5-5",
+   "heading": "地上又は水上の人又は物件との間に30mの距離を保てない飛行",
+   "requirements": [
+    {
+     "id": "distance30-1",
+     "standard": "機体について、第三者及び物件に接触した際の危害を軽減する機能を有すること。",
+     "alternatives": [
+      "プロペラガード等を装備していないが、飛行の際は飛行経路全体を見渡せる位置に補助者を配置し、第三者が飛行範囲内に立ち入らないよう注意喚起を行う。",
+      "プロペラガードを装備している。装備しない場合は、飛行の際は飛行経路全体を見渡せる位置に補助者を配置し、第三者が飛行範囲内に立ち入らないよう注意喚起を行う。"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "event",
+   "clause": "5-6",
+   "heading": "多数の者の集合する催し場所の上空における飛行",
+   "requirements": [
+    {
+     "id": "event-1",
+     "standard": "第三者及び物件に接触した際の危害を軽減する機能を有すること。",
+     "alternatives": []
+    },
+    {
+     "id": "event-2",
+     "standard": "想定される運用により、10回以上の離陸及び着陸を含む3時間以上の飛行実績を有すること。",
+     "alternatives": []
+    }
+   ]
+  },
+  {
+   "id": "hazardous",
+   "clause": "5-7",
+   "heading": "危険物の輸送",
+   "requirements": [
+    {
+     "id": "hazardous-1",
+     "standard": "機体について、危険物の輸送に適した装備が備えられていること。",
+     "alternatives": []
+    }
+   ]
+  },
+  {
+   "id": "drop",
+   "clause": "5-8",
+   "heading": "物件投下",
+   "requirements": [
+    {
+     "id": "drop-1",
+     "standard": "機体について、不用意に物件を投下する機構でないこと。",
+     "alternatives": []
+    }
+   ]
+  }
+ ],
+ "dji_models": [
+  {
+   "names": [
+    "DJI Neo"
+   ],
+   "values": {
+    "manufacturer": "DJI",
+    "name": "DJI Neo",
+    "weight_kg": "0.135",
+    "controller_manufacturer": "DJI",
+    "controller_name": "DJI RC-N3",
+    "max_speed_kmh": "57.6",
+    "max_altitude_m": "2000",
+    "radio_range_m": "6000",
+    "max_wind_ms": "8",
+    "max_payload_kg": "",
+    "max_flight_time_min": "18"
+   },
+   "source": "https://www.dji.com/jp/neo/specs",
+   "checked": "2026-10-11"
+  },
+  {
+   "names": [
+    "DJI Neo 2"
+   ],
+   "values": {
+    "manufacturer": "DJI",
+    "name": "DJI Neo 2",
+    "weight_kg": "0.160",
+    "controller_manufacturer": "DJI",
+    "controller_name": "DJI RC-N3",
+    "max_speed_kmh": "43.2",
+    "max_altitude_m": "2000",
+    "radio_range_m": "6000",
+    "max_wind_ms": "10.7",
+    "max_payload_kg": "",
+    "max_flight_time_min": "19"
+   },
+   "source": "https://www.dji.com/jp/neo-2/specs",
+   "checked": "2026-10-11"
+  },
+  {
+   "names": [
+    "DJI Avata 2"
+   ],
+   "values": {
+    "manufacturer": "DJI",
+    "name": "DJI Avata 2",
+    "weight_kg": "0.377",
+    "controller_manufacturer": "DJI",
+    "controller_name": "DJI Goggles 3＋DJI RC Motion 3／DJI FPV送信機 3",
+    "max_speed_kmh": "97.2",
+    "max_altitude_m": "5000",
+    "radio_range_m": "10000",
+    "max_wind_ms": "10.7",
+    "max_payload_kg": "",
+    "max_flight_time_min": "23"
+   },
+   "source": "https://www.dji.com/jp/avata-2/specs",
+   "checked": "2026-10-11"
+  },
+  {
+   "names": [
+    "DJI Avata 360"
+   ],
+   "values": {
+    "manufacturer": "DJI",
+    "name": "DJI Avata 360",
+    "weight_kg": "0.455",
+    "controller_manufacturer": "DJI",
+    "controller_name": "DJI Goggles 3／N3＋DJI RC Motion 3／DJI FPV送信機 3",
+    "max_speed_kmh": "64.8",
+    "max_altitude_m": "4500",
+    "radio_range_m": "10000",
+    "max_wind_ms": "10.7",
+    "max_payload_kg": "",
+    "max_flight_time_min": "23"
+   },
+   "source": "https://www.dji.com/jp/avata-360/specs",
+   "checked": "2026-10-11"
+  },
+  {
+   "names": [
+    "DJI Mavic 3"
+   ],
+   "values": {
+    "manufacturer": "DJI",
+    "name": "DJI Mavic 3",
+    "weight_kg": "0.895",
+    "controller_manufacturer": "DJI",
+    "controller_name": "DJI RC-N1",
+    "max_speed_kmh": "75.6",
+    "max_altitude_m": "6000",
+    "radio_range_m": "8000",
+    "max_wind_ms": "12",
+    "max_payload_kg": "",
+    "max_flight_time_min": "46"
+   },
+   "source": "https://www.dji.com/jp/support/product/mavic-3",
+   "checked": "2026-10-11"
+  },
+  {
+   "names": [
+    "DJI Mavic 3 Cine"
+   ],
+   "values": {
+    "manufacturer": "DJI",
+    "name": "DJI Mavic 3 Cine",
+    "weight_kg": "0.899",
+    "controller_manufacturer": "DJI",
+    "controller_name": "DJI RC Pro",
+    "max_speed_kmh": "75.6",
+    "max_altitude_m": "6000",
+    "radio_range_m": "8000",
+    "max_wind_ms": "12",
+    "max_payload_kg": "",
+    "max_flight_time_min": "46"
+   },
+   "source": "https://www.dji.com/jp/support/product/mavic-3",
+   "checked": "2026-10-11"
+  },
+  {
+   "names": [
+    "DJI Mavic 3 Pro"
+   ],
+   "values": {
+    "manufacturer": "DJI",
+    "name": "DJI Mavic 3 Pro",
+    "weight_kg": "0.958",
+    "controller_manufacturer": "DJI",
+    "controller_name": "DJI RC",
+    "max_speed_kmh": "75.6",
+    "max_altitude_m": "6000",
+    "radio_range_m": "8000",
+    "max_wind_ms": "12",
+    "max_payload_kg": "",
+    "max_flight_time_min": "43"
+   },
+   "source": "https://www.dji.com/jp/support/product/mavic-3-pro",
+   "checked": "2026-10-11"
+  },
+  {
+   "names": [
+    "DJI Mavic 3 Pro Cine"
+   ],
+   "values": {
+    "manufacturer": "DJI",
+    "name": "DJI Mavic 3 Pro Cine",
+    "weight_kg": "0.963",
+    "controller_manufacturer": "DJI",
+    "controller_name": "DJI RC Pro",
+    "max_speed_kmh": "75.6",
+    "max_altitude_m": "6000",
+    "radio_range_m": "8000",
+    "max_wind_ms": "12",
+    "max_payload_kg": "",
+    "max_flight_time_min": "43"
+   },
+   "source": "https://www.dji.com/jp/support/product/mavic-3-pro",
+   "checked": "2026-10-11"
+  },
+  {
+   "names": [
+    "DJI FPV"
+   ],
+   "values": {
+    "manufacturer": "DJI",
+    "name": "DJI FPV",
+    "weight_kg": "0.795",
+    "controller_manufacturer": "DJI",
+    "controller_name": "DJI FPV送信機 2＋DJI FPVゴーグル V2",
+    "max_speed_kmh": "140",
+    "max_altitude_m": "6000",
+    "radio_range_m": "6000",
+    "max_wind_ms": "10.8",
+    "max_payload_kg": "",
+    "max_flight_time_min": "20"
+   },
+   "source": "https://www.dji.com/jp/support/product/dji-fpv",
+   "checked": "2026-10-11"
+  },
+  {
+   "names": [
+    "DJI Air 2S"
+   ],
+   "values": {
+    "manufacturer": "DJI",
+    "name": "DJI Air 2S",
+    "weight_kg": "0.595",
+    "controller_manufacturer": "DJI",
+    "controller_name": "DJI RC-N1",
+    "max_speed_kmh": "68.4",
+    "max_altitude_m": "5000",
+    "radio_range_m": "8000",
+    "max_wind_ms": "10.7",
+    "max_payload_kg": "",
+    "max_flight_time_min": "31"
+   },
+   "source": "https://www.dji.com/jp/support/product/air-2s",
+   "checked": "2026-10-11"
+  },
+  {
+   "names": [
+    "Phantom 4 Pro"
+   ],
+   "values": {
+    "manufacturer": "DJI",
+    "name": "Phantom 4 Pro",
+    "weight_kg": "1.388",
+    "controller_manufacturer": "DJI",
+    "controller_name": "Phantom 4 Pro 送信機",
+    "max_speed_kmh": "72",
+    "max_altitude_m": "6000",
+    "radio_range_m": "4000",
+    "max_wind_ms": "10",
+    "max_payload_kg": "",
+    "max_flight_time_min": "30"
+   },
+   "source": "https://www.dji.com/jp/support/product/phantom-4-pro",
+   "checked": "2026-10-11"
+  },
+  {
+   "names": [
+    "Phantom 4 Pro V2.0",
+    "Phantom 4 Pro V2"
+   ],
+   "values": {
+    "manufacturer": "DJI",
+    "name": "Phantom 4 Pro V2.0",
+    "weight_kg": "1.375",
+    "controller_manufacturer": "DJI",
+    "controller_name": "Phantom 4 Pro V2.0 送信機",
+    "max_speed_kmh": "72",
+    "max_altitude_m": "6000",
+    "radio_range_m": "6000",
+    "max_wind_ms": "10",
+    "max_payload_kg": "",
+    "max_flight_time_min": "30"
+   },
+   "source": "https://www.dji.com/jp/support/product/phantom-4-pro-v2",
+   "checked": "2026-10-11"
+  }
+ ]
+}

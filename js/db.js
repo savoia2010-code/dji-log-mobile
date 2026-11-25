@@ -5,7 +5,8 @@ const DB_NAME = "dji-log-mobile";
 // 3: Mac版から受け取った携行用の飛行日誌（carry）を追加
 // 4: Mac版へ送る飛行記録の原本（outbox。送ったら消す）を追加
 // 5: 点検整備記録（maintenance）を追加
-const DB_VERSION = 5;
+// 6: このiPhoneで直した具備資料の部分（gubi）を追加
+const DB_VERSION = 6;
 
 let dbPromise = null;
 
@@ -51,6 +52,9 @@ function open() {
       }
       if (!db.objectStoreNames.contains("maintenance")) {
         db.createObjectStore("maintenance", { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains("gubi")) {
+        db.createObjectStore("gubi", { keyPath: "key" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -122,6 +126,14 @@ export const deleteMaintenance = (id) => tx("maintenance", "readwrite", (s) => s
 export async function putMaintenanceList(records) {
   if (!records.length) return;
   await tx("maintenance", "readwrite", (s) => { for (const r of records) s.put(r); });
+}
+
+// このiPhoneで直した具備資料の部分（キーは "シリアル|部分"。部分は spec / compliance / photo:<置き場所>）
+export const getAllGubi = () => tx("gubi", "readonly", (s) => s.getAll());
+export const deleteGubi = (key) => tx("gubi", "readwrite", (s) => s.delete(key));
+export async function putGubiList(records) {
+  if (!records.length) return;
+  await tx("gubi", "readwrite", (s) => { for (const r of records) s.put(r); });
 }
 
 export const getCarry = () => tx("carry", "readonly", (s) => s.get("latest"));
