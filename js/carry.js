@@ -27,7 +27,7 @@ import { submitSection } from "./submit.js";
 import * as settingsSync from "./settingsSync.js";
 import { autoInspect } from "./autoInspect.js";
 import { maintenanceRow } from "./maintenance.js";
-import { cleanup as cleanupGubi, effective as effectiveGubi, openGubiEditor } from "./gubiEdit.js";
+import { cleanup as cleanupGubi, effective as effectiveGubi, openGubiEditor, reqSlotNames } from "./gubiEdit.js";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -620,8 +620,13 @@ function documentsSection(documents, doc, serial) {
         const box = el("div", "doc-req");
         box.append(el("div", "doc-std", str(r.standard)));
         box.append(el("div", "doc-comp", str(r.compliance) || "（未入力）"));
-        const p = photos[`req:${str(r.id)}`];
-        if (p) box.append(photo(p, "適合性を示す写真"));
+        // 基準ごとに何枚か付けられる写真
+        const shots = reqSlotNames(str(r.id)).map((s) => photos[s]).filter(Boolean);
+        if (shots.length) {
+          const g = el("div", "doc-photos");
+          shots.forEach((p, i) => g.append(photo(p, shots.length > 1 ? `適合性を示す写真 ${i + 1}` : "適合性を示す写真")));
+          box.append(g);
+        }
         d.append(box);
       }
     }

@@ -29,6 +29,11 @@ const OTHER = "other";                     // 代替措置を自由に書くと�
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024;  // Mac版の上限
 const GROUP1 = ["front", "top", "side", "controller"];
 const GROUP2 = ["ops_body", "ops_video", "ops_controller"];
+// 追加基準の写真は、基準ごとに9枚まで（Mac版 gubi.REQ_PHOTO_MAX と同じ）。
+// 1枚目は "req:<基準ID>"、2枚目からは "req:<基準ID>:2" 〜 ":9"
+const REQ_PHOTO_MAX = 9;
+export const reqSlotNames = (reqId) =>
+  [`req:${reqId}`, ...Array.from({ length: REQ_PHOTO_MAX - 1 }, (_, i) => `req:${reqId}:${i + 2}`)];
 
 export const partKey = (serial, section) => `${serial}|${section}`;
 
@@ -156,7 +161,57 @@ export async function toJpeg(file, max = 1600, quality = 0.8) {
 
 let editing = null;
 
-function photoSlot(slot, caption) {
+// 写真を撮る・選ぶ入力（capture 付きはカメラが開く）。選んだら縮小して onPicked に渡す
+function photoInputs(slot, onPicked) {
+  const out = [];
+  for (const [label, capture] of [["写真を撮る", true], ["写真を選ぶ", false]]) {
+    const l = el("label", "btn small", label);
+    const input = el("input");
+    input.type = "file"; input.accept = "image/*"; input.hidden = true;
+    if (capture) input.setAttribute("capture", "environment");
+    input.dataset.slot = slot;
+    input.onchange = async () => {
+      const file = input.files && input.files[0];
+      input.value = "";
+      if (!file) return;
+      try {
+        onPicked(await toJpeg(file));
+      } catch (e) {
+        alert(e.message || String(e));
+      }
+    };
+    l.append(input);
+    out.push(l);
+  }
+  return out;
+}
+
+/** 追加基準1つ分の写真（何枚でも。9枚まで）と「写真を追加」。 */
+function reqPhotos(reqId) {
+  const box = el("div", "gubi-photos gubi-req-photos");
+  box.dataset.req = reqId;
+  const draw = () => {
+    box.innerHTML = "";
+    const photos = editing.state.photos;
+    const filled = reqSlotNames(reqId).filter((s) => photos[s]);
+    filled.forEach((slot, i) => box.append(photoSlot(slot, `写真 ${i + 1}`, draw)));
+    const free = reqSlotNames(reqId).find((s) => !photos[s]);
+    if (free) {
+      const add = el("div", "gubi-photo gubi-photo-add");
+      add.dataset.slot = free;
+      add.append(el("div", "doc-photo-none", filled.length ? "＋ 写真を追加" : "なし"));
+      add.append(el("div", "gubi-photo-caption", "適合性を示す写真（任意・9枚まで）"));
+      const actions = el("div", "gubi-photo-actions");
+      actions.append(...photoInputs(free, (data) => { editing.state.photos[free] = data; draw(); }));
+      add.append(actions);
+      box.append(add);
+    }
+  };
+  draw();
+  return box;
+}
+
+function photoSlot(slot, caption, onChange = null) {
   const box = el("div", "gubi-photo");
   box.dataset.slot = slot;
   const draw = () => {
@@ -172,30 +227,12 @@ function photoSlot(slot, caption) {
     box.append(el("div", "gubi-photo-caption", caption));
     const actions = el("div", "gubi-photo-actions");
     // カメラで撮る（iPhoneでは capture 付きの入力でカメラが開く）／写真ライブラリから選ぶ
-    for (const [label, capture] of [["写真を撮る", true], ["写真を選ぶ", false]]) {
-      const l = el("label", "btn small", label);
-      const input = el("input");
-      input.type = "file"; input.accept = "image/*"; input.hidden = true;
-      if (capture) input.setAttribute("capture", "environment");
-      input.dataset.slot = slot;
-      input.onchange = async () => {
-        const file = input.files && input.files[0];
-        input.value = "";
-        if (!file) return;
-        try {
-          editing.state.photos[slot] = await toJpeg(file);
-          draw();
-        } catch (e) {
-          alert(e.message || String(e));
-        }
-      };
-      l.append(input);
-      actions.append(l);
-    }
+    const changed = () => (onChange ? onChange() : draw());
+    actions.append(...photoInputs(slot, (data) => { editing.state.photos[slot] = data; changed(); }));
     if (src) {
       const del = el("button", "btn small danger", "削除");
       del.type = "button";
-      del.onclick = () => { delete editing.state.photos[slot]; draw(); };
+      del.onclick = () => { delete editing.state.photos[slot]; changed(); };
       actions.append(del);
     }
     box.append(actions);
@@ -267,7 +304,7 @@ function complianceCard(rules) {
         f.append(sel, other);
         box.append(f);
       }
-      box.append(photoSlot(`req:${r.id}`, "適合性を示す写真（任意）"));
+      box.append(reqPhotos(r.id));
       card.append(box);
     }
   }

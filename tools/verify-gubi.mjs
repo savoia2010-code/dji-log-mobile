@@ -73,13 +73,21 @@ await page.click('#gubi-body label:has(input[name="gb-res-did-1"][value="適"])'
 await page.click('#gubi-body label:has(input[name="gb-res-bvlos-1"][value="否"])');
 await page.selectOption("#gb-alt-bvlos-1", "other");
 await page.fill("#gb-other-bvlos-1", "補助者が常に周囲を監視し、操縦者に助言する。");
+// 1つの基準に写真を2枚（機体とゴーグル、ゴーグルの表示など）。1枚目はカメラ、2枚目はライブラリから
+const addInput = (capture) => `#gubi-body .gubi-req-photos[data-req="bvlos-1"] .gubi-photo-add input[type=file]${capture ? "[capture]" : ":not([capture])"}`;
+await page.setInputFiles(addInput(true), { name: "a.png", mimeType: "image/png", buffer: PNG });
+await page.waitForSelector('#gubi-body .gubi-photo[data-slot="req:bvlos-1"] img');
+await page.setInputFiles(addInput(false), { name: "b.png", mimeType: "image/png", buffer: PNG });
+await page.waitForSelector('#gubi-body .gubi-photo[data-slot="req:bvlos-1:2"] img');
+const nextAdd = await page.getAttribute('#gubi-body .gubi-req-photos[data-req="bvlos-1"] .gubi-photo-add', "data-slot");
+if (nextAdd !== "req:bvlos-1:3") fail(`次に入れる欄が違う: ${nextAdd}`);
 await page.click("#gubi-save");
 await page.waitForSelector("#gubi-editor[hidden]", { state: "attached" });
 
 let parts = await page.evaluate(async () => (await (await import("./js/db.js")).getAllGubi())
   .map((p) => ({ section: p.section, sentAt: p.sentAt, data: p.data, deleted: !!p.deleted })));
 const sections = parts.map((p) => p.section).sort().join();
-if (sections !== "compliance,photo:front,spec") fail(`保存した部分が違う: ${sections}`);
+if (sections !== "compliance,photo:front,photo:req:bvlos-1,photo:req:bvlos-1:2,spec") fail(`保存した部分が違う: ${sections}`);
 const photo = parts.find((p) => p.section === "photo:front");
 if (!photo || !String(photo.data.dataUrl).startsWith("data:image/jpeg;base64,")) fail("写真が JPEG になっていない");
 const comp = (parts.find((p) => p.section === "compliance") || {}).data || {};
@@ -99,11 +107,13 @@ if (!/0\.160/.test(shown) || !/DJI RC-N3/.test(shown)) fail("携行タブの具�
 if (!/提出用のPDFにも反映/.test(shown)) fail("Macに届くまでPDFは古いと知らせていない");
 if (!/補助者が常に周囲を監視/.test(shown)) fail("代替措置が出ない");
 if (!(await page.$('#carry-body .doc-photo img'))) fail("写真が出ない");
+const reqShots = await page.$$eval("#carry-body figcaption", (xs) => xs.map((x) => x.textContent).filter((t) => t.startsWith("適合性を示す写真")));
+if (reqShots.join() !== "適合性を示す写真 1,適合性を示す写真 2") fail(`基準の写真が2枚出ない: ${reqShots}`);
 // 「Macへ送る」の数にも入る
 await page.click('.tab-btn[data-view="inspections"]');
 await page.waitForTimeout(300);
-// （飛行のあった日の日常点検が自動で1件できているので、それと合わせて4件）
-if (!/未送信 4件/.test(await page.textContent("#insp-send"))) fail(`送る数に入らない: ${await page.textContent("#insp-send")}`);
+// （具備資料の5つの部分と、飛行のあった日に自動でできた日常点検1件で6件）
+if (!/未送信 6件/.test(await page.textContent("#insp-send"))) fail(`送る数に入らない: ${await page.textContent("#insp-send")}`);
 
 // 写真を消す（入力画面を開き直す）
 await page.click('.tab-btn[data-view="carry"]');
@@ -120,7 +130,7 @@ const fromMac = structuredClone(fresh);
 fromMac.generatedAt = later;
 fromMac.documents.aircraft[SN] = { serial: SN, label: "DJI Neo 2", registration: "", spec: { name: "DJI Neo 2", weight_kg: "0.160" },
   categories: [], category_ids: ["did", "bvlos"], answers: {}, photos: {}, pdf: "", pdf_name: "",
-  sync: { spec: later, compliance: later, "photo:front": later } };
+  sync: { spec: later, compliance: later, "photo:front": later, "photo:req:bvlos-1": later, "photo:req:bvlos-1:2": later } };
 await page.evaluate(async (data) => (await import("./js/carry.js")).acceptCarry(data), fromMac);
 parts = await page.evaluate(async () => (await (await import("./js/db.js")).getAllGubi()));
 if (parts.length) fail(`Macに入ったあとも残る: ${parts.map((p) => p.section)}`);
