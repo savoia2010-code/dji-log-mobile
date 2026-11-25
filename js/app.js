@@ -9,12 +9,13 @@ import { buildLogbooks, shareBlob } from "./submit.js";
 import { bindInspections, renderInspections } from "./inspections.js";
 import { bindCarry, isInstalled, mergedAircraft, protectStorage, renderCarry } from "./carry.js";
 import * as erase from "./erase.js";
+import { autoInspect } from "./autoInspect.js";
 import * as gas from "./gas.js";
 import * as settingsSync from "./settingsSync.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.17.0";
+export const APP_VERSION = "0.18.0";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -129,6 +130,10 @@ async function importFiles(fileList) {
   if (erasedSkipped) msg += ` / 記録ごと削除した機体の ${erasedSkipped} 件は入れませんでした`;
   if (failed) msg += ` / 読めなかったもの ${failed} 件`;
   text.textContent = msg + (errors.length ? `\n${errors.join("\n")}` : "");
+
+  // 飛んだ日に、点検の記録を自動で作る（飛行前・飛行後とも全項目「正常」）
+  const inspected = added ? await autoInspect() : 0;
+  if (inspected) text.textContent += `\n点検の記録 ${inspected} 日分を自動で作りました`;
 
   await refresh();
   await renderCarry(); // 携行タブの「今日の記録」にもすぐ反映する
@@ -805,6 +810,8 @@ async function start() {
   const v = $("#app-version");
   if (v) v.textContent = `バージョン ${APP_VERSION}`;
   try {
+    // 前に読み込んだ飛行の日にも、点検の記録を自動で作る
+    if (await autoInspect()) await renderInspections();
     await renderCarry();
     await protectStorage();
     const incoming = gas.takeSetupFromUrl();

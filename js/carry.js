@@ -25,6 +25,7 @@ import { formatPlace } from "./geocode.js";
 import { inspectionSummary, openInspection, postSummary } from "./inspections.js";
 import { submitSection } from "./submit.js";
 import * as settingsSync from "./settingsSync.js";
+import { autoInspect } from "./autoInspect.js";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -102,6 +103,8 @@ export async function acceptCarry(data) {
   if (changed.length) {
     document.dispatchEvent(new CustomEvent("settings-synced", { detail: changed }));
   }
+  // Macの日誌と見比べて、点検の記録を自動で作る（Macにある日は作らない・重なった自動の記録は外す）
+  await autoInspect();
   await renderCarry();
   return true;
 }
@@ -124,6 +127,7 @@ function dailyCard(r, localOnly) {
   s.append(el("span", `badge ${sum.cls}`, `飛行前：${sum.text}`));
   s.append(el("span", `badge ${post.cls}`, `飛行後：${post.text}`));
   if (localOnly) s.append(el("span", "badge manual", "iPhoneのみ"));
+  if (r.auto) s.append(el("span", "badge muted", "自動"));
   d.append(s);
   kv(d, "実施場所", str(r.place));
   kv(d, "実施者", str(r.inspector));

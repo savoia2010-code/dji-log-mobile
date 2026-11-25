@@ -91,6 +91,8 @@ export async function renderInspections() {
     const line2 = el("div", "line1");
     line2.append(el("span", `badge ${s.cls}`, `飛行前：${s.text}`));
     line2.append(el("span", `badge ${p.cls}`, `飛行後：${p.text}`));
+    // 飛行記録から自動で作った記録（全項目 正常）。異常があった日は開いて直す
+    if (r.auto) line2.append(el("span", "badge muted", "自動"));
     body.append(line2);
     body.append(el("div", "meta", [r.inspector, r.place].filter(Boolean).join(" ／ ") || "—"));
     body.onclick = () => openInspection(r.id, "", { phase: p.done ? "pre" : "post" });
@@ -381,6 +383,16 @@ async function saveInspection() {
   if (postCount && postBlank
     && !confirm(`飛行後の点検で、結果が未記入の項目が ${postBlank} 個あります。このまま保存しますか？`)) return;
 
+  // 直した自動の記録は、手で入れた記録になる
+  delete r.auto;
+  // 新しく入れた記録は、同じ日・同じ機体の自動の記録（直していないもの）と置き換える
+  if (editing.isNew) {
+    for (const x of await db.getAllInspections()) {
+      if (x.auto && x.id !== r.id && x.aircraftSerial === r.aircraftSerial && x.date === r.date) {
+        await db.deleteInspection(x.id);
+      }
+    }
+  }
   await db.putInspection(r);
   closeInspection();
   await renderInspections();
