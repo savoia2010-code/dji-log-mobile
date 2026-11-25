@@ -4,7 +4,8 @@ const DB_NAME = "dji-log-mobile";
 // 2: 日常点検記録（inspections）を追加
 // 3: Mac版から受け取った携行用の飛行日誌（carry）を追加
 // 4: Mac版へ送る飛行記録の原本（outbox。送ったら消す）を追加
-const DB_VERSION = 4;
+// 5: 点検整備記録（maintenance）を追加
+const DB_VERSION = 5;
 
 let dbPromise = null;
 
@@ -47,6 +48,9 @@ function open() {
       }
       if (!db.objectStoreNames.contains("outbox")) {
         db.createObjectStore("outbox", { keyPath: "fileName" });
+      }
+      if (!db.objectStoreNames.contains("maintenance")) {
+        db.createObjectStore("maintenance", { keyPath: "id" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -110,6 +114,16 @@ export async function putInspections(records) {
 }
 
 // Mac版から受け取った携行用の飛行日誌。常に最新の1つだけを持つ。
+// 点検整備記録（様式3）。日常点検と同じく、識別子と更新日時を持ち、Mac版へ送る
+export const getAllMaintenance = () => tx("maintenance", "readonly", (s) => s.getAll());
+export const getMaintenance = (id) => tx("maintenance", "readonly", (s) => s.get(id));
+export const putMaintenance = (r) => tx("maintenance", "readwrite", (s) => s.put(r));
+export const deleteMaintenance = (id) => tx("maintenance", "readwrite", (s) => s.delete(id));
+export async function putMaintenanceList(records) {
+  if (!records.length) return;
+  await tx("maintenance", "readwrite", (s) => { for (const r of records) s.put(r); });
+}
+
 export const getCarry = () => tx("carry", "readonly", (s) => s.get("latest"));
 export const putCarry = (data) =>
   tx("carry", "readwrite", (s) => s.put({ key: "latest", data, receivedAt: new Date().toISOString() }));

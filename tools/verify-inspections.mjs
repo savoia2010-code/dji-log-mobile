@@ -94,6 +94,9 @@ const sentPost = JSON.parse((await page.evaluate(() => window.__shared)).text).i
 // 開き直しても残っているか（IndexedDB に保存されたか）
 await page.reload({ waitUntil: "networkidle" });
 await page.click('.tab-btn[data-view="inspections"]');
+// 一覧は IndexedDB から読んで描くので、描き終わるのを待つ
+await page.waitForFunction(() => /DJI Neo/.test(document.getElementById("insp-list").textContent), null, { timeout: 5000 })
+  .catch(() => {});
 const persisted = await page.textContent("#insp-list");
 
 const result = {

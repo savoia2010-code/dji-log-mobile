@@ -68,6 +68,12 @@ await page.selectOption("#in-aircraft", "SN-TEST-0001");
 await page.click("text=すべて「正常」");
 await page.click("#insp-save");
 await page.waitForFunction(() => /送信済み/.test(document.getElementById("insp-list").textContent), null, { timeout: 15000 });
+// 点検整備を記録すると、日常点検と同じく自動で送られる
+await page.click("#maint-new");
+await page.selectOption("#mt-aircraft", "SN-TEST-0001");
+await page.fill("#mt-detail", "プロペラ4枚を交換（純正品）");
+await page.click("#maint-save");
+await page.waitForFunction(() => /送信済み/.test(document.getElementById("maint-list").textContent), null, { timeout: 15000 });
 // 何も変わっていなければ、同期してもバックアップを送り直さない（通信を減らす）
 await page.click('.tab-btn[data-view="settings"]');
 const beforeIdle = actions.length;
@@ -107,6 +113,7 @@ const resentOld = ((await callMock("listFlightLogs")).items || []).some((x) => x
 
 const inbox = (await callMock("listInbox")).items || [];
 const sentRecords = inbox.flatMap((i) => JSON.parse(i.content).inspections || []);
+const sentMaint = inbox.flatMap((i) => JSON.parse(i.content).maintenance || []);
 const backup = (await callMock("getBackup")).backup;
 
 // 同じ機体の登録記号と型式を続けて直しても、先に直した登録記号が戻らない
@@ -178,6 +185,7 @@ await page.click('.tab-btn[data-view="inspections"]');
 await page.waitForFunction(() => /全項目 正常/.test(document.getElementById("insp-list").textContent),
   null, { timeout: 10000 }).catch(() => {});
 const restored = await page.textContent("#insp-list");
+const restoredMaint = await page.evaluate(async () => (await (await import("./js/db.js")).getAllMaintenance()).length);
 const restoredSettings = await page.evaluate(async () => {
   const db = await import("./js/db.js");
   const a = (await db.getAllAircraft()).find((x) => x.serial === "SN-TEST-0001");
@@ -210,6 +218,8 @@ for (let i = 0; i < 50 && !qrDialogs.length; i++) await qr.waitForTimeout(100);
 const result = {
   設定後: afterSetup, 日誌の受信: carryInfo.includes("Macで作成"),
   送られた点検: sentRecords.length, バックアップの点検: backup ? backup.inspections.length : 0,
+  送られた点検整備: sentMaint.map((m) => m.detail), バックアップの点検整備: backup ? (backup.maintenance || []).length : 0,
+  戻した点検整備: restoredMaint,
   戻したあと: restored.includes("全項目 正常"), 合言葉違い: wrongStatus,
   読み込み直しで原本を送った: resentOld,
   機体の欄を続けて直す: twoEdits,
@@ -226,6 +236,8 @@ const result = {
 console.log(JSON.stringify(result, null, 1));
 await browser.close();
 const ok = result.日誌の受信 && result.送られた点検 === 1 && result.バックアップの点検 === 1
+  && sentMaint.length === 1 && sentMaint[0].detail === "プロペラ4枚を交換（純正品）" && !("sentAt" in sentMaint[0])
+  && result.バックアップの点検整備 === 1 && restoredMaint === 1
   && result.戻したあと && result.空のときに戻すか聞いた && restoredSettings.距離 === 5
   && twoEdits[0] === "JU0000000077" && twoEdits[1] === "見本型式" && fromMac === "6"
   && pilotFromMac === "見本 一郎" && syncNotice

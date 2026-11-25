@@ -26,6 +26,7 @@ import { inspectionSummary, openInspection, postSummary } from "./inspections.js
 import { submitSection } from "./submit.js";
 import * as settingsSync from "./settingsSync.js";
 import { autoInspect } from "./autoInspect.js";
+import { maintenanceRow } from "./maintenance.js";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -163,6 +164,7 @@ function maintenanceCard(m) {
   const s = el("summary");
   s.append(el("span", "date", str(m.date)));
   s.append(el("span", "meta", str(m.detail)));
+  if (m.localOnly) s.append(el("span", "badge manual", "iPhoneのみ"));
   d.append(s);
   kv(d, "総飛行時間", str(m.total_time));
   kv(d, "実施理由", str(m.reason));
@@ -270,6 +272,7 @@ export async function mergedAircraft(data) {
   const localAircraft = await db.getAllAircraft();
   const localFlights = await db.getAllFlights();
   const localInspections = await db.getAllInspections();
+  const localMaintenance = (await db.getAllMaintenance()).filter((r) => r.aircraftSerial);
   const bySerial = new Map(localAircraft.map((a) => [a.serial, a]));
   // 記録ごと消した機体の、消す前の記録は見せない（Macがまだ消していない日誌が届いていても）
   const marks = await erase.marks();
@@ -294,6 +297,7 @@ export async function mergedAircraft(data) {
   // Macの日誌に無い機体でも、このiPhoneに記録があれば載せる
   const serials = new Set([
     ...localFlights.map((f) => f.aircraftSn), ...localInspections.map((r) => r.aircraftSerial),
+    ...localMaintenance.map((r) => r.aircraftSerial),
   ].filter(Boolean));
   for (const serial of serials) {
     if (out.some((a) => a.serial === serial)) continue;
@@ -323,6 +327,20 @@ export async function mergedAircraft(data) {
       ...localFlightRows(localFlights.filter((f) => f.aircraftSn === a.serial),
         a.flights, settings, bySerial.get(a.serial), a.knownFiles || []),
     ];
+    // このiPhoneで記録した点検整備。Macに届いたあと（同じid）は、新しい方を見せる
+    const ac = bySerial.get(a.serial) || {};
+    const initial = ac.initialFlightSeconds;
+    const maintById = new Map(localMaintenance.filter((r) => r.aircraftSerial === a.serial).map((r) => [r.id, r]));
+    const macMaint = new Set(a.maintenance.map((m) => m.id));
+    a.maintenance = [
+      ...a.maintenance.map((m) => {
+        const mine = maintById.get(m.id);
+        return mine && time(mine.updatedAt) >= time(m.updatedAt)
+          ? { ...maintenanceRow(mine, a.flights, initial), local: true } : m;
+      }),
+      ...[...maintById.values()].filter((r) => !macMaint.has(r.id))
+        .map((r) => ({ ...maintenanceRow(r, a.flights, initial), localOnly: true })),
+    ].sort((x, y) => str(x.date).localeCompare(str(y.date)));
     // 使用終了（手放した機体）。記録は見せるが、後ろに回す
     a.retired = !!(bySerial.get(a.serial) || {}).retired;
   }

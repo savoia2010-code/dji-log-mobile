@@ -148,6 +148,17 @@
       <p class="help" id="insp-send-help"></p>
     </div>
     <div id="insp-list" class="list"></div>
+
+    <!-- 点検整備記録（様式3） -->
+    <div class="card" id="maint">
+      <h2>点検整備記録</h2>
+      <button class="btn primary block" id="maint-new">点検整備を記録する</button>
+      <p class="help">
+        定期点検・部品交換（プロペラ、バッテリーなど）・修理・改造を行ったときに記録します（様式3）。
+        Macへは日常点検と一緒に送ります。
+      </p>
+    </div>
+    <div id="maint-list" class="list"></div>
   </section>
 
   <!-- 設定 -->
@@ -253,6 +264,16 @@
     <button class="btn primary" id="insp-save">保存</button>
   </div>
   <div class="sheet-body" id="insp-body"></div>
+</div>
+
+<!-- 点検整備の入力 -->
+<div id="maint-editor" class="sheet" hidden>
+  <div class="sheet-head">
+    <button class="btn" id="maint-close">閉じる</button>
+    <span id="maint-title"></span>
+    <button class="btn primary" id="maint-save">保存</button>
+  </div>
+  <div class="sheet-body" id="maint-body"></div>
 </div>
 
 <script src="./vendor/xlsx.mini.min.js"></script>

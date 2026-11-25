@@ -10,12 +10,13 @@ import { bindInspections, renderInspections } from "./inspections.js";
 import { bindCarry, isInstalled, mergedAircraft, protectStorage, renderCarry } from "./carry.js";
 import * as erase from "./erase.js";
 import { autoInspect } from "./autoInspect.js";
+import { bindMaintenance, renderMaintenance } from "./maintenance.js";
 import * as gas from "./gas.js";
 import * as settingsSync from "./settingsSync.js";
 
 // 実機で「新しい版が反映されているか」を目視できるようにする。
 // 中身を変えたらここを上げる。
-export const APP_VERSION = "0.18.0";
+export const APP_VERSION = "0.19.0";
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -570,7 +571,7 @@ function bind() {
       $("#view-inspections").hidden = v !== "inspections";
       $("#view-settings").hidden = v !== "settings";
       if (v === "settings") { renderSettings(); renderGas(); }
-      if (v === "inspections") renderInspections();
+      if (v === "inspections") { renderInspections(); renderMaintenance(); }
       if (v === "carry") renderCarry();
     };
   }
@@ -591,6 +592,7 @@ function bind() {
     () => applyBulk("specifiedFlight", chosen($("#bulk-specified")));
 
   bindInspections();
+  bindMaintenance();
   bindCarry();
   bindGas();
 
@@ -672,6 +674,7 @@ async function autoSync(force = false) {
   if (status) {
     await renderGas();
     await renderInspections();
+    await renderMaintenance();
     if (status.restorable) await offerRestore(status.restorable);
   }
 }
@@ -685,6 +688,7 @@ async function offerRestore(n) {
     await refresh();
     await renderCarry();
     await renderInspections();
+    await renderMaintenance();
     renderSettings();
     alert(`戻しました（飛行 ${r.flights}件・点検 ${r.inspections}件${r.settings ? "・設定" : ""}）。`);
   } catch (e) {
@@ -714,6 +718,7 @@ function bindGas() {
       await refresh();
       await renderCarry();
       await renderInspections();
+      await renderMaintenance();
       renderSettings();
       alert(`戻しました（点検 ${r.inspections}件・飛行 ${r.flights}件${r.settings ? "・設定" : ""}）。`);
     } catch (e) {

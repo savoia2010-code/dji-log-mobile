@@ -35,6 +35,7 @@ const checks = [
   ["機体の使用終了と記録ごとの削除", ["tools/verify-aircraft.mjs", fx("carry-sample.json"), fx("flight-sample.json")]],
   ["飛行記録をフォルダごと読み込む", ["tools/verify-folder.mjs", fx("flight-sample.json")]],
   ["点検の記録を自動で作る", ["tools/verify-auto-inspection.mjs", fx("carry-sample.json"), fx("flight-sample.json")]],
+  ["点検整備記録をiPhoneで記録する", ["tools/verify-maintenance.mjs", fx("carry-sample.json"), fx("flight-sample.json")]],
 ];
 
 // Googleドライブ同期の検証は、Mac版の検証用GASサーバー（Code.gs を手元で動かすもの）を使う。

@@ -65,8 +65,13 @@ export async function purge(serial, at = new Date().toISOString()) {
     await db.deleteInspection(r.id);
     inspections++;
   }
+  for (const r of await db.getAllMaintenance()) {
+    if (r.aircraftSerial !== serial || !dayErased(m, serial, r.date)) continue;
+    await db.deleteMaintenance(r.id);
+  }
   const left = (await db.getAllFlights()).some((f) => f.aircraftSn === serial)
-    || (await db.getAllInspections()).some((r) => r.aircraftSerial === serial);
+    || (await db.getAllInspections()).some((r) => r.aircraftSerial === serial)
+    || (await db.getAllMaintenance()).some((r) => r.aircraftSerial === serial);
   if (!left) {
     await db.deleteAircraft(serial);
     await settingsSync.forgetAircraft(serial);

@@ -164,14 +164,16 @@ export async function syncNow({ force = false } = {}) {
     const status = { time: new Date().toISOString(), ok: true, sent: 0, flights: 0, received: false, message: "" };
     let outdated = false;
     try {
-      // 1. 未送信の点検を送る
+      // 1. 未送信の点検（日常点検・点検整備）を送る
       const inspections = await db.getAllInspections();
       const unsent = inspections.filter(isUnsent);
-      if (unsent.length) {
+      const unsentMaint = (await db.getAllMaintenance()).filter(isUnsent);
+      if (unsent.length || unsentMaint.length) {
         await call(conf, "putInspections", {
           data: {
             format: SYNC_FORMAT, version: SYNC_VERSION, exportedAt: new Date().toISOString(),
             inspections: unsent.map(({ sentAt, ...rest }) => rest),
+            maintenance: unsentMaint.map(({ sentAt, ...rest }) => rest),
           },
         });
         // 送っている間に直された記録は、送った内容と違うので「送信済み」にしない（直した内容を
@@ -183,7 +185,13 @@ export async function syncNow({ force = false } = {}) {
           .filter((r, i) => r && r.updatedAt === unsent[i].updatedAt)
           .map((r) => ({ ...r, sentAt: now }));
         await db.putInspections(done);
+        const currentMaint = new Map((await db.getAllMaintenance()).map((r) => [r.id, r]));
+        await db.putMaintenanceList(unsentMaint
+          .map((r) => currentMaint.get(r.id))
+          .filter((r, i) => r && r.updatedAt === unsentMaint[i].updatedAt)
+          .map((r) => ({ ...r, sentAt: now })));
         status.sent = unsent.length;
+        status.sentMaintenance = unsentMaint.length;
       }
 
       // 1b. 読み込んだ飛行記録の原本を送る（Mac版が解析して日誌に入れる）
@@ -210,6 +218,7 @@ export async function syncNow({ force = false } = {}) {
       const local = {
         inspections: await db.getAllInspections(),
         flights: await db.getAllFlights(),
+        maintenance: await db.getAllMaintenance(),
         carryGeneratedAt: carryNow ? String(carryNow.data.generatedAt || "") : "",
         // Mac版と揃える設定（飛行とみなす距離・操縦者・機体の登録記号など）も、変えた時刻と
         // 一緒に残す。入れ直したときに初期値に戻らないように。Mac版もこれを見て合わせる
@@ -235,6 +244,7 @@ export async function syncNow({ force = false } = {}) {
 
       const parts = [];
       if (status.sent) parts.push(`点検 ${status.sent}件を送信`);
+      if (status.sentMaintenance) parts.push(`点検整備 ${status.sentMaintenance}件を送信`);
       if (status.flights) parts.push(`飛行記録 ${status.flights}件を送信`);
       if (status.received) parts.push("Macの日誌を受信");
       status.message = parts.join("、") || "変更はありませんでした";
@@ -260,7 +270,7 @@ export async function syncNow({ force = false } = {}) {
  * バックアップを合わせる。点検は識別子ごとに新しい方、飛行は記録ファイル名ごと。
  * 合わせるだけなので、バックアップの記録が減るのは、記録ごと削除した機体の分だけ。
  */
-export function mergeBackup(remote, inspections, flights, { sync = {}, erased = {} } = {}) {
+export function mergeBackup(remote, inspections, flights, { sync = {}, erased = {}, maintenance = [] } = {}) {
   const old = remote && remote.format === BACKUP_FORMAT ? remote : { inspections: [], flights: [] };
   // 記録ごと消した機体の、消す前の記録は残さない（どちらかで消していれば消す）
   const marks = erase.mergeMarks(old.erased, erased);
@@ -271,6 +281,14 @@ export function mergeBackup(remote, inspections, flights, { sync = {}, erased = 
     const cur = insp.get(r.id);
     if (!cur || String(r.updatedAt) >= String(cur.updatedAt)) insp.set(r.id, r);
   }
+  // 点検整備記録も、識別子ごとに新しい方
+  const maint = new Map();
+  for (const r of [...(old.maintenance || []), ...maintenance]) {
+    if (!r || !r.id) continue;
+    if (erase.dayErased(marks, r.aircraftSerial, r.date)) continue;
+    const cur = maint.get(r.id);
+    if (!cur || String(r.updatedAt) >= String(cur.updatedAt)) maint.set(r.id, r);
+  }
   const fl = new Map();
   for (const f of [...(old.flights || []), ...flights]) {
     if (!f || !f.fileName || erase.flightErased(marks, f.aircraftSn, f.takeoffTime)) continue;
@@ -278,7 +296,7 @@ export function mergeBackup(remote, inspections, flights, { sync = {}, erased = 
   }
   return {
     format: BACKUP_FORMAT, version: 1, savedAt: new Date().toISOString(),
-    inspections: [...insp.values()], flights: [...fl.values()],
+    inspections: [...insp.values()], flights: [...fl.values()], maintenance: [...maint.values()],
     // 設定は項目ごとに新しく変えた方（入れ直したばかりのiPhoneの初期値で上書きしない）
     sync: settingsSync.merge(old.sync, sync, marks),
     erased: marks,
@@ -309,6 +327,11 @@ export async function restoreFromBackup() {
     && !erase.dayErased(marks, r.aircraftSerial, r.date)
     && (!mine.has(r.id) || String(r.updatedAt) > String(mine.get(r.id).updatedAt)));
   await db.putInspections(insp);
+  const mineMaint = new Map((await db.getAllMaintenance()).map((r) => [r.id, r]));
+  const maint = (backup.maintenance || []).filter((r) => r && r.id
+    && !erase.dayErased(marks, r.aircraftSerial, r.date)
+    && (!mineMaint.has(r.id) || String(r.updatedAt) > String(mineMaint.get(r.id).updatedAt)));
+  await db.putMaintenanceList(maint);
 
   const have = new Set((await db.getAllFlights()).map((f) => f.fileName));
   const flights = (backup.flights || []).filter((f) => f && f.fileName && !have.has(f.fileName)
@@ -318,6 +341,6 @@ export async function restoreFromBackup() {
 
   // 設定は、このiPhoneより後に変えたもの（と、このiPhoneでまだ決めていないもの）を戻す
   const restoredSettings = (await settingsSync.applyRemote(backup.sync)).length;
-  return { inspections: insp.length, flights: flights.length, settings: restoredSettings,
+  return { inspections: insp.length, flights: flights.length, maintenance: maint.length, settings: restoredSettings,
            savedAt: backup.savedAt };
 }

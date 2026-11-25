@@ -2,7 +2,7 @@
 // 解析・保存・Excel出力はすべて端末内で完結するため、
 // いったん読み込めば圏外でも使える（住所の自動入力だけは通信が要る）。
 
-const CACHE = "dji-log-mobile-v28";
+const CACHE = "dji-log-mobile-v29";
 const ASSETS = [
   "./",
   "./index.html",
@@ -21,6 +21,7 @@ const ASSETS = [
   "./js/settingsSync.js",
   "./js/erase.js",
   "./js/autoInspect.js",
+  "./js/maintenance.js",
   "./vendor/dji_log_parser_js.mjs",
   "./vendor/xlsx.mini.min.js",
   "./vendor/flatgeobuf-geojson.min.js",

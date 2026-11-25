@@ -64,7 +64,8 @@ const aircraftLabel = (a) =>
 export async function renderInspections() {
   const list = (await db.getAllInspections())
     .sort((a, b) => (b.date + b.updatedAt).localeCompare(a.date + a.updatedAt));
-  const unsent = list.filter(isUnsent).length;
+  // 点検整備記録の未送信分も一緒に送るので、数に含める
+  const unsent = list.filter(isUnsent).length + (await db.getAllMaintenance()).filter(isUnsent).length;
 
   $("#insp-send").textContent = unsent ? `Macへ送る（未送信 ${unsent}件）` : "Macへ送る";
   $("#insp-send-help").textContent = unsent
@@ -311,7 +312,7 @@ export async function openInspection(id, presetSerial = "", { phase = "" } = {})
   if (phase === "post" && !isNew) c2.scrollIntoView({ block: "start" });
 }
 
-async function fillPlace(input, btn) {
+export async function fillPlace(input, btn) {
   if (!navigator.geolocation) {
     alert("この端末では現在地を取得できません。");
     return;
@@ -404,11 +405,14 @@ async function saveInspection() {
 
 async function sendToMac() {
   const all = await db.getAllInspections();
+  const allMaint = await db.getAllMaintenance();
   let targets = all.filter(isUnsent);
-  if (!targets.length) {
-    if (!all.length) { alert("送る点検記録がありません。"); return; }
+  let maintTargets = allMaint.filter(isUnsent);
+  if (!targets.length && !maintTargets.length) {
+    if (!all.length && !allMaint.length) { alert("送る点検記録がありません。"); return; }
     if (!confirm("未送信の記録はありません。すべての記録を送り直しますか？（Mac側で重複はしません）")) return;
     targets = all;
+    maintTargets = allMaint;
   }
 
   const payload = {
@@ -416,6 +420,8 @@ async function sendToMac() {
     version: SYNC_VERSION,
     exportedAt: new Date().toISOString(),
     inspections: targets.map(({ sentAt, ...rest }) => rest),
+    // 点検整備記録の未送信分も一緒に送る
+    maintenance: maintTargets.map(({ sentAt, ...rest }) => rest),
   };
   const d = new Date();
   const name = `点検記録_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`
@@ -449,7 +455,10 @@ async function sendToMac() {
 
   const now = new Date().toISOString();
   await db.putInspections(targets.map((r) => ({ ...r, sentAt: now })));
+  await db.putMaintenanceList(maintTargets.map((r) => ({ ...r, sentAt: now })));
   await renderInspections();
+  const { renderMaintenance } = await import("./maintenance.js");
+  await renderMaintenance();
 }
 
 export function bindInspections() {

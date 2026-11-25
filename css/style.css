@@ -266,3 +266,11 @@ main {
 .submit-actions { display: flex; gap: 6px; flex: none; }
 .submit-actions .btn.small { margin-top: 0; }
 .field-chk { white-space: normal; display: flex; margin: 4px 0 12px; }
+
+/* 点検整備：総飛行時間の「時間・分」 */
+.inline { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.inline input.short {
+  width: 5em; padding: 10px; font-size: 16px; border: 1px solid var(--border);
+  border-radius: 10px; background: var(--input-bg); color: var(--text);
+}
+#maint h2 { margin-top: 0; }
